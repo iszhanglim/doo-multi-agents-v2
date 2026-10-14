@@ -253,8 +253,29 @@ curl -s -I $PUBLIC_URL/ | head -1
 
 **`/api/health` 必须保持公开**：平台用它做探活，一旦加鉴权会导致部署失败。
 
+**班级 / 场景库管理（可配置化）**
+
+- 班级与场景已从硬编码改为 PostgreSQL 可配置，均带默认值（`PostgresStorage.init()` 启动时
+  `seedDefaultClasses()` / `seedDefaultScenarios()` 兜底播种；本地 JSON 模式返回内置默认）。
+- 接口与权限：
+  - `GET /api/classes`（`requireAuth`，所有角色可读）→ `{ classes: [{id, name}] }`
+  - `POST /api/classes` / `PUT /api/classes/:id` / `DELETE /api/classes/:id`（`requireAdmin`，仅管理员写）
+  - `GET /api/scenarios`（`requireAuth`）→ `{ scenarios: [{id, label, description, enabled}] }`
+  - `POST/PUT/DELETE /api/scenarios(/:id)`（`requireAdmin`）；`PUT` 支持 `enabled` 启停
+  - 本地 JSON 模式写接口返回 503（仅 PostgreSQL 托管时持久化 CRUD）
+- 前端 `useClasses` / `useScenarios` hook 统一读取；AdminConfigPage 提供增删改/重命名 UI；
+  测评页（AssessPage）、班级统计页（ClassStatsPage）、画像页动态读取，不再硬编码。
+- 默认场景 7 个：smart_story_corner / narrative_train / journey_podcast 及新增的
+  morning_check_in（入园晨检）/ area_activity（区域活动）/ outdoor_sport（户外体育）/
+  daily_life（生活活动·进餐午睡）。`/api/scenario/:type` 后三者在 `src/index.ts` 的
+  `runScenario` switch 中统一代理到 `smartStoryCorner.run`。
+- `/api/stats` 与 `/api/portraits` 支持 `?classId=` 班级过滤；老师角色限定本班（前端按
+  `user.classId` 锁定只读），admin 可切换任意班级。
+
 **入参边界**（公开站点防滥用）：`/api/assess` 叙事 ≤2000 字；`/api/conversation/turn`
-单条发言 ≤500 字；`/api/tts` 文本 ≤500 字；`/api/stt` 上传 ≤16MB（与平台单文件上限对齐）；
+单条发言 ≤500 字；`/api/tts` 文本 ≤500 字；`/api/stt` 上传 ≤15MB（与平台单文件上限对齐，
+后端起 `express.raw({ limit: '15mb' })` + `MAX_STT_BYTES` 双重校验，超限返回 413；
+前端 VoiceInput 在上传前做本地大小预检，超 15MB 直接友好拒绝并引导分段录制）；
 场景类型走白名单校验，非法值返回 400 而非 500。
 
 > 前端登录页本身不是安全边界，但它的登录结果会换取服务端令牌，
