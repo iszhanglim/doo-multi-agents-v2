@@ -161,30 +161,6 @@ const VoiceOutput: React.FC<VoiceOutputProps> = ({ text, autoPlay = true }) => {
       type="button"
     >
       {isSpeaking ? '🔊' : '🔈'}
-
-      <style>{`
-        .voice-output-btn {
-          background: none;
-          border: none;
-          cursor: pointer;
-          font-size: 16px;
-          padding: 2px 6px;
-          border-radius: 4px;
-          transition: all 0.2s;
-          line-height: 1;
-          flex-shrink: 0;
-        }
-        .voice-output-btn:hover {
-          background: rgba(107, 91, 149, 0.1);
-        }
-        .voice-output-btn.speaking {
-          animation: voice-pulse 1s ease-in-out infinite;
-        }
-        @keyframes voice-pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.15); }
-        }
-      `}</style>
     </button>
   );
 };

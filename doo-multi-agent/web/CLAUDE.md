@@ -1,99 +1,83 @@
-# CLAUDE.md
+# CLAUDE.md — web/ 前端与服务端说明
 
-This file provides guidance to Claude Code when working with the `web/` subdirectory of the DOO Multi-Agent System.
+本文档为在 `web/` 子目录下工作（尤其是 AI 编程助手）提供准确指引，反映**当前线上实际**实现，替代早期过时的 localStorage 模拟鉴权 / localhost:3001 直连等描述。
 
 ## Project Overview
 
-The web frontend is a React + TypeScript + Vite application for the **幼儿叙事能力评估系统** (Preschool Children's Narrative Ability Assessment Platform). It provides a UI for teachers to:
-- Assess children's narrative ability using the DOO model (Diction, Organization, Opinion)
-- View child portraits with radar charts and historical assessments
-- View class-level aggregate statistics
-- Manage teacher accounts (admin only)
+React + TypeScript + Vite 前端 + Express 服务端（tsx 直接运行 TS），同源部署在**单端口** HTTP 服务上：
+`web/server/index.ts` 同时托管前端静态产物 `web/dist` 与 `/api/*` 接口。后端通过 `import { DOOMultiAgentSystem } from '../../src'` 复用父目录多智能体核心。
+
+教师可：
+- 用 DOO 模型（词句 Diction / 组织 Organization / 观点 Opinion）评估幼儿叙事能力
+- 查看幼儿画像（雷达图、评估历史、报告导出）
+- 查看班级聚合统计
+- 管理班级与场景库（admin）
 
 ## Tech Stack
 
-- **Frontend**: React 19 + TypeScript 6 + Vite 8
-- **Backend**: Express.js (port 3001), imports `DOOMultiAgentSystem` from parent project at `../../src`
-- **Auth**: Client-side, localStorage-based (no real backend auth)
-- **Styling**: Inline `<style>` tags (CSS-in-JS without a library) + global CSS variables
-- **Fonts**: ZCOOL KuaiLe (headings), Noto Sans SC (body) — loaded via Google Fonts in index.html
+- **前端**：React 19 + TypeScript + Vite 8
+- **路由**：react-router-dom v7 **HashRouter**（兼容静态托管，支持前进/后退、刷新停留、可分享链接）
+- **服务端**：Express + tsx（运行时不依赖编译产物）
+- **鉴权**：**HMAC token（12h）+ bcrypt + requireAdmin** 角色鉴权（非 localStorage 模拟）
+- **存储**：PostgreSQL（生产，经 `DATABASE_URL`/`PGDATABASE_URL`）；本地回落 JSON 文件
+- **样式**：全局 CSS 变量（`src/index.css` `:root`）+ 页面级 CSS（`web/src/styles/*.css`），无内联 `<style>`（报警/导出 HTML 模板除外）
+- **字体**：ZCOOL KuaiLe 本地子集 `web/public/fonts/ZCOOLKuaiLe-subset.woff2` + 系统中文字体回退栈（不依赖 Google Fonts）
 
-## Development Commands
+## Development & Build
+
+构建与运行由**项目根脚本**统一驱动（勿在 web/ 内另起 vite dev server 作为交付）：
 
 ```bash
-# Frontend dev server (Vite HMR, default port 5173)
-npm run dev
+# 构建（根目录，pnpm）：装依赖 + tsc + vite build → web/dist
+bash scripts/build.sh
 
-# Build frontend
-npm run build
-
-# Backend dev server (Express, port 3001, uses tsx for live reload)
-npm run server:dev
-
-# Backend production (requires prior build of parent project)
-npm run server
+# 运行（根目录）：读 .preview 端口 fallback 5000，绑定 0.0.0.0
+bash scripts/run.sh
 ```
 
-The backend (`server/index.ts`) depends on the parent project's compiled output at `../../src`. Build the parent project first with `npm run build` in the parent directory.
+`tsc -b` 仅编译 `web/src`（strict，含 `noUnusedLocals`）；`web/server/*` 与父 `src/*` 由 tsx 运行时执行（类型错误不在此暴露，需通过接口实测验证）。
 
-## Architecture
+## Routing
 
-### Routing
+`src/App.tsx` 用 `HashRouter`；路由表：
+`/`（Dashboard）、`/assess`、`/portraits`、`/portrait/:childId`（PortraitPage 用 `useParams` 自动选中幼儿）、
+`/class-stats`、`/profile`、`/admin-users`、`/admin-config`，`*` → `/`。
 
-No router library. `App.tsx` uses `useState<Page>` with 6 values: `dashboard`, `assess`, `portraits`, `class-stats`, `profile`, `admin-users`.
+服务端 SPA fallback：`express.static` 托管 `web/dist`，仅非 `/api` 路径回落 `index.html`；`/api/*` 未命中统一 404。
 
-### Pages (`src/pages/`)
+## Pages & Components
 
-| Page | Description |
-|------|-------------|
-| `LoginPage.tsx` | Login/register with test credentials shown (teacher1/123456, admin/admin) |
-| `Dashboard.tsx` | Stats cards, quick actions, recent activity feed, DOO model info |
-| `AssessPage.tsx` | Core: narrative input form + multi-agent assessment results display |
-| `PortraitPage.tsx` | Child portrait browser with radar chart, history, PDF export |
-| `ClassStatsPage.tsx` | Class-level stats with bar/pie charts, class comparison table |
-| `ProfilePage.tsx` | User profile editing, password change |
-| `AdminUsersPage.tsx` | Admin-only: CRUD teacher accounts |
+页面（`src/pages/`）：`LoginPage`、`Dashboard`、`AssessPage`（班级/场景从接口动态拉取）、`PortraitPage`、
+`ClassStatsPage`、`ProfilePage`、`AdminUsersPage`（教师管理）、`AdminConfigPage`（班级/场景库管理）。
 
-### Components (`src/components/`)
+组件（`src/components/`）：
+- `Sidebar` — 桌面固定侧边栏 + `<900px` 顶部抽屉导航（`.mobile-topbar`）
+- `RadarChart` — SVG 三轴雷达图
+- `VoiceInput` / `VoiceOutput` — 语音采集（WebAudio 16kHz PCM→WAV）与 TTS 播放；上传前本地 15MB 预检
+- `ReportExport` — 生成独立 HTML 报告（内嵌自包含 `<style>`，属导出文档）
+- `PortraitList` / `PortraitDetail` / `HistoryTimeline` — PortraitPage 拆出的子组件
+- `UserTable` / `AddUserModal` / `EditUserModal` — AdminUsersPage 拆出的子组件
 
-- `Sidebar.tsx` — Fixed 260px left sidebar with nav, agent status indicators, logout
-- `RadarChart.tsx` — Pure SVG 3-axis radar chart (Diction/Organization/Opinion)
-- `ReportExport.tsx` — Generates standalone HTML report for print/PDF export
-- `VoiceInput.tsx` — Web Speech API voice input (zh-CN)
+## State & Data
 
-### State Management
+- `AuthContext.tsx` — 登录/注册/管理员 CRUD；`API_BASE='/api'`（相对路径，同源）
+- hooks `src/hooks/`：`usePortraits` / `useClasses` / `useScenarios` / `useStats` — 接口数据获取；
+  按登录老师 `user.classId` 自动带 `?classId=` 过滤（老师只见本班），admin 见全部
+- `src/services/api.ts` — `API_BASE='/api'`，请求带 `X-Auth-Token`
 
-No Redux/Zustand. State is managed via:
-- `AuthContext.tsx` — React Context for auth (login, register, admin CRUD)
-- Custom hooks in `src/hooks/` — API data fetching
-- Local component state in pages
+## API 要点
 
-### API Client (`src/services/api.ts`)
-
-Base URL: `http://localhost:3001/api`. Key endpoints:
-- `POST /assess` — Run narrative assessment (accepts `NarrativeInput`)
-- `GET /portraits` — All child portraits
-- `GET /portrait/:childId` — Single portrait
-- `DELETE /portrait/:childId` — Delete portrait
-- `GET /stats` — Aggregate statistics
-
-### DOO Assessment Model
-
-Three dimensions, 7 sub-dimensions, each scored 1-3:
-- **Diction (词句)**: vocabulary, sentenceStructure
-- **Organization (语言组织)**: narrativeStructure, themeRelevance, eventExpansion, expressiveness
-- **Opinion (独白观点)**: narrativeViewpoint
-
-Level calculation (`src/utils/levelCalculator.ts`): Level 1 (< 1.5 avg), Level 2 (1.5–2.4), Level 3 (≥ 2.5).
-
-### Data Storage
-
-Child portrait JSON files in `data/` directory (23 files currently). Each contains child info, assessment history, and radar averages. Managed by the backend server.
+- 鉴权：`requireAuth`（读）、`requireAdmin`（写，如班级/场景/用户管理）
+- `/api/classes`：班级 CRUD（GET 读 / POST/PUT/DELETE 需 admin）
+- `/api/scenarios`：场景库 CRUD（含启停）；`/api/scenario/:type` 运行某场景
+- `/api/portraits`、`/api/stats`：支持 `?classId=` 过滤
+- `/api/stt`：上限 **15MB**（与平台单文件上限对齐），超限 413
+- `/api/health`：探活，无鉴权
 
 ## Key Conventions
 
-- All text is in Chinese (zh-CN). UI labels, error messages, and comments use Chinese.
-- Components use inline `<style>` tags, not CSS modules or styled-components.
-- CSS custom properties defined in `src/index.css` (primary: #FF8C42, secondary: #6B5B95, accent: #88D8B0).
-- No TypeScript path aliases. Relative imports only.
-- The `web/` directory is a standalone Vite project but the backend imports from the parent `../../src` multi-agent system.
+- UI 文案全中文（zh-CN）
+- 样式用 CSS 变量 + `web/src/styles/*.css`；新的页面样式不新增内联 `<style>`
+- 无 TypeScript 路径别名，相对导入
+- `web/` 是独立 Vite 工程，但服务端 `web/server/index.ts` 复用父 `../../src` 多智能体核心
+- **不要**用 `localhost:3001` 直连后端（同源部署，前端统一走相对 `/api`）

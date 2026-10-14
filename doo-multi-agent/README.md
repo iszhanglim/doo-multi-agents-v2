@@ -11,72 +11,58 @@
 ## 快速开始
 
 ```bash
-# 安装依赖
-npm install
+# 安装依赖（项目使用 pnpm，勿用 npm/yarn）
+pnpm install
 
-# 配置环境变量
+# 配置环境变量（密钥仅从环境变量读取，禁止硬编码/提交）
 cp .env.example .env
 # 编辑 .env 填入 LLM API 密钥
 
-# 运行演示
-npm start demo
+# 构建（根目录脚本：装依赖 + tsc + 前端构建 → web/dist）
+bash scripts/build.sh
 
-# 评估单条叙事
-npm start assess "我今天去公园玩，看到了很多花，很开心。"
-
-# 运行场景
-npm start scenario smart_story_corner "有一天，小兔子去找胡萝卜..."
-
-# 查看幼儿画像
-npm start portrait child_001
-
-# 运行测试
-npm test
-
-# 启动Web界面（legacy，端口3000）
-npm run web
-
-# 启动React前端（端口5173 + 后端端口3001）
-cd web && npm install && npm run dev
+# 运行（根目录脚本：读 .preview 端口 fallback 5000，绑定 0.0.0.0）
+bash scripts/run.sh
 ```
 
 ## 目录结构
 
 ```
-src/
-├── core/              # 核心框架：消息总线、智能体基类、编排器
-├── agents/            # 三个智能体：D博士、小欧老师、多多
-├── doo/               # DOO评估模型：评估引擎、观测点定义
-├── nlp/               # NLP模块：LLM客户端、叙事解析、特征提取
-├── portrait/          # 画像系统：画像引擎、存储、雷达图
-├── scenarios/         # 三个场景：智能故事角、叙事火车、西游播客
-├── config/            # 配置管理
-├── web/               # Web服务器（legacy）
-└── index.ts           # 系统入口和CLI
+src/               # 多智能体核心：消息总线、智能体、DOO 模型、NLP、画像、场景
+web/               # 前端（React+Vite）+ 服务端（Express，tsx 运行）
+web/src/           # React 前端源码（HashRouter 路由、页面、组件、hooks）
+web/server/        # Express 服务端（所有 /api/* 路由，静态托管 web/dist）
+web/scripts/       # build.sh / run.sh（根脚本）
 ```
 
-## 三个应用场景
+## 应用场景
 
-| 场景 | 说明 | 适用 |
-|------|------|------|
-| 智能故事角 | 个体叙事活动，自适性绘本讲述和语言游戏 | 个别化指导 |
-| 叙事火车 | 班级集体活动，小组叙事游戏和同伴互评 | 集体教学 |
-| 西游播客 | 《西游记》主题，亲子共读和播客录制 | 家园共育 |
+场景由**后端场景库动态配置**（admin 可增删/启停），内置默认场景：
+入园晨检、区域活动、户外/体育游戏、生活活动（进餐/午睡）、智能故事角、叙事小火车、奇妙旅行 等。
+前端测评页从 `/api/scenarios` 动态读取并支持选择，默认场景行为保持不变。
+
+## 鉴权与部署
+
+- **鉴权**：登录发放 HMAC token（默认 12h）+ bcrypt 密码哈希；班级/场景/用户管理等写操作需 `requireAdmin`，
+  普通接口需 `requireAuth`（详见 `web/server/index.ts`）。密钥（`AUTH_SECRET` / `LLM_API_KEY` 等）仅从环境变量读取。
+- **存储**：生产用 PostgreSQL（`DATABASE_URL`，平台注入 `PGDATABASE_URL`），无数据库时回落本地 JSON 文件。
+- **部署形态**：单端口 HTTP 服务，前端静态资源 + `/api/*` 同源；SPA fallback 仅非 `/api` 路径返回 `index.html`，
+  `/api/*` 未命中统一 404。部署规格：外网 80 → 内网 5000。
 
 ## 配置说明
 
-支持通过环境变量配置（参见 `.env.example`）：
+支持通过环境变量配置（参见 `.env.example` 与根 `AGENTS.md` §6 完整清单）：
 
-- `LLM_PROVIDER` — LLM提供商（openai/anthropic/custom）
-- `LLM_API_KEY` — API密钥
-- `LLM_MODEL` — 模型名称（默认 gpt-3.5-turbo）
-- `STORAGE_TYPE` — 存储类型（json/sqlite）
-- `DATA_PATH` — 数据目录路径
+- `LLM_PROVIDER` / `LLM_API_KEY` / `LLM_MODEL` / `LLM_BASE_URL` — LLM 接入（默认 `coze` 平台托管；当前沙箱走 `openai` 协议 + DeepSeek）
+- `DATABASE_URL` — PostgreSQL 连接串（生产必填）
+- `AUTH_SECRET` / `AUTH_TOKEN_TTL_HOURS` / `ACCESS_CODE` — 鉴权与站点口令
+- `RATE_LIMIT_PER_MIN` / `RATE_LIMIT_GLOBAL_PER_MIN` — 限流
 
 ## 技术栈
 
-- **后端**: TypeScript + Node.js
-- **前端**: React 19 + Vite 8
-- **AI**: 支持 OpenAI / Anthropic / 自定义端点
-- **存储**: JSON文件（可扩展SQLite）
-- **测试**: Jest
+- **前端**: React 19 + TypeScript + Vite 8 + react-router（HashRouter）
+- **服务端**: Node.js + TypeScript + Express（tsx 运行）
+- **鉴权**: HMAC token + bcrypt
+- **AI**: 平台托管 LLM（coze）/ OpenAI 兼容端点 / 规则引擎兜底；TTS/STT 平台托管
+- **存储**: PostgreSQL（生产，JSON 文件为本地回落）
+- **包管理**: pnpm

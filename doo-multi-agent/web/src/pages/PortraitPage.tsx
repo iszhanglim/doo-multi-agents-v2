@@ -1,13 +1,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import RadarChart from '../components/RadarChart';
 
 import { usePortraits } from '../hooks/usePortraits';
 import { useClasses } from '../hooks/useClasses';
 import { useScenarios } from '../hooks/useScenarios';
 import { useAuth } from '../context/AuthContext';
-import { getLevelColor, calculateLevelFromDimensions } from '../utils/levelCalculator';
+import { getLevelColor } from '../utils/levelCalculator';
 import type { ChildPortrait, DOOAssessment } from '../types';
+import PortraitList from '../components/PortraitList';
+import PortraitDetail from '../components/PortraitDetail';
 
 const LEVEL_LABELS: Record<number, string> = {
   1: '初级·需支持',
@@ -15,14 +16,6 @@ const LEVEL_LABELS: Record<number, string> = {
   3: '中级·基本达成',
   4: '高级·表现优秀',
   5: '高级·表现优秀',
-};
-
-const LEVEL_DESCRIPTIONS: Record<number, string> = {
-  1: '处于初级发展阶段（1-3分），需要更多支架支持。建议从简单的词汇和句型开始，逐步引导幼儿完整叙述事件。',
-  2: '处于初级发展阶段（1-3分），在词句运用和叙事组织方面需加强支持。建议多进行词汇丰富度和叙事顺序的引导。',
-  3: '处于中级发展水平（3-4分），基本达成当前阶段的叙事要求。建议巩固已有能力，并尝试更丰富的词汇和更完整的叙事结构。',
-  4: '处于高级发展水平（4-5分），表现优秀。叙事结构完整，能够清晰表达个人感受和观点。建议继续保持，并挑战更复杂的叙事内容。',
-  5: '处于高级发展水平（4-5分），表现优秀。叙事结构完整，能够清晰表达个人感受和观点。建议继续保持，并挑战更复杂的叙事内容。',
 };
 
 const DIMENSION_DETAILS = {
@@ -92,8 +85,6 @@ const PortraitPage: React.FC = () => {
   const getOverallScore = (radar: ChildPortrait['currentRadar']) => {
     return ((radar.diction + radar.organization + radar.opinion) / 3).toFixed(1);
   };
-
-
 
   const canDelete = (portrait: ChildPortrait) => {
     if (user?.role === 'admin') return true;
@@ -167,38 +158,57 @@ const PortraitPage: React.FC = () => {
     <p>基于《学前儿童语言学习量表》的专业评估</p>
   </div>
 
-  <div class="info-grid">
-    <div class="info-item">
-      <div class="info-label">幼儿姓名</div>
-      <div class="info-value">${portrait.name || '未命名'}</div>
-    </div>
-    <div class="info-item">
-      <div class="info-label">所属班级</div>
-      <div class="info-value">${CLASS_NAME_MAP[portrait.classId] || portrait.classId}</div>
-    </div>
-    <div class="info-item">
-      <div class="info-label">评估次数</div>
-      <div class="info-value">${assessments.length} 次</div>
+  <div class="section">
+    <h2>基本信息</h2>
+    <div class="info-grid">
+      <div class="info-item">
+        <div class="info-label">姓名</div>
+        <div class="info-value">${portrait.name || '未命名'}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">班级</div>
+        <div class="info-value">${CLASS_NAME_MAP[portrait.classId] || portrait.classId || '未分配'}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">评估次数</div>
+        <div class="info-value">${assessments.length} 次</div>
+      </div>
     </div>
   </div>
 
   <div class="section">
-    <h2>综合评估</h2>
+    <h2>综合评分</h2>
     <div class="score-grid">
       <div class="score-card">
-        <div class="score-name">综合评分</div>
-        <div class="score-value" style="color: ${getLevelColor(parseFloat(overallScore))}">${overallScore}</div>
+        <div class="score-name">综合得分</div>
+        <div class="score-value">${overallScore}<span style="font-size:14px"> / 5</span></div>
       </div>
       <div class="score-card">
-        <div class="score-name">发展等级</div>
-        <div class="score-value" style="color: ${getLevelColor(parseFloat(overallScore))}">等级 ${level}</div>
+        <div class="score-name">发展水平</div>
+        <div class="score-value" style="font-size:24px">${LEVEL_LABELS[level] || '未知'}</div>
       </div>
       <div class="score-card">
-        <div class="score-name">发展状态</div>
-        <div class="score-value" style="color: ${getLevelColor(parseFloat(overallScore))}; font-size: 18px;">${LEVEL_LABELS[level] || '未知'}</div>
+        <div class="score-name">最近评估</div>
+        <div class="score-value" style="font-size:20px;color:#6B5B95">${latestAssessment?.timestamp ? new Date(latestAssessment.timestamp).toLocaleDateString('zh-CN') : '暂无'}</div>
       </div>
     </div>
-    <p>${LEVEL_DESCRIPTIONS[level] || ''}</p>
+  </div>
+
+  <div class="section">
+    <h2>雷达图评分</h2>
+    ${(() => {
+      const scores = [
+        { key: 'diction', name: '词句维度', value: portrait.currentRadar.diction },
+        { key: 'organization', name: '组织维度', value: portrait.currentRadar.organization },
+        { key: 'opinion', name: '观点维度', value: portrait.currentRadar.opinion },
+      ];
+      return scores.map((s) => `
+        <div class="score-item" style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f0f0f0;">
+          <span style="font-weight:600;">${s.name}</span>
+          <span style="color:#FF8C42;font-weight:700;">${s.value.toFixed(1)} / 5</span>
+        </div>
+      `).join('');
+    })()}
   </div>
 
   <div class="section">
@@ -297,13 +307,6 @@ const PortraitPage: React.FC = () => {
     }
   };
 
-  const getSubDimensionScore = (assessment: DOOAssessment | undefined, dimension: string, subKey: string): number => {
-    if (!assessment) return 1;
-    const dim = assessment.dimensions[dimension as keyof typeof assessment.dimensions];
-    if (!dim) return 1;
-    return (dim as Record<string, number>)[subKey] || 1;
-  };
-
   return (
     <div className="portrait-page animate-fade-in-up">
       <header className="page-header">
@@ -313,233 +316,27 @@ const PortraitPage: React.FC = () => {
 
       <div className="portrait-layout">
         {/* Children List */}
-        <div className="children-list-container">
-          <div className="search-box">
-            <span className="search-icon">🔍</span>
-            <input
-              type="text"
-              className="input-field"
-              placeholder="搜索幼儿姓名..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-
-          {loading ? (
-            <div className="loading-text">加载中...</div>
-          ) : (
-            <div className="children-grid">
-              {filteredPortraits.map((child) => {
-                const score = parseFloat(getOverallScore(child.currentRadar));
-                return (
-                  <div
-                    key={child.childId}
-                    className={`child-card ${selectedChild?.childId === child.childId ? 'active' : ''}`}
-                  >
-                    <button
-                      className="child-card-main"
-                      onClick={() => setSelectedChild(child)}
-                    >
-                      <div className="child-avatar">
-                        {child.name?.[0] || '?'}
-                      </div>
-                      <div className="child-info">
-                        <span className="child-name">{child.name || '未命名'}</span>
-                        <span className="child-score">
-                          综合: <strong style={{ color: getLevelColor(score) }}>{score}</strong>
-                        </span>
-                      </div>
-                      <div
-                        className="child-level-dot"
-                        style={{ background: getLevelColor(score) }}
-                      />
-                    </button>
-                    {canDelete(child) && (
-                      <button
-                        className="child-delete-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(child.childId);
-                        }}
-                        disabled={deleting}
-                        title="删除画像"
-                      >
-                        🗑️
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <PortraitList
+          portraits={filteredPortraits}
+          loading={loading}
+          selectedChildId={selectedChild?.childId || null}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          onSelect={setSelectedChild}
+          onDelete={handleDelete}
+          canDelete={canDelete}
+          deleting={deleting}
+        />
 
         {/* Portrait Detail */}
         {selectedChild ? (
-          <div className="portrait-detail">
-            {/* 头部信息 */}
-            <div className="detail-header">
-              <div className="detail-avatar">
-                {selectedChild.name?.[0] || '?'}
-              </div>
-              <div className="detail-info">
-                <h2>{selectedChild.name || '未命名'}</h2>
-                <span className="detail-meta">
-                  班级: {CLASS_NAME_MAP[selectedChild.classId] || selectedChild.classId} · 
-                  评估次数: {selectedChild.basePortrait?.assessments?.length || 0} 次
-                </span>
-              </div>
-              <div className="detail-actions">
-                <button className="btn-export" onClick={handleExportPDF}>
-                  📄 导出PDF
-                </button>
-                <button className="btn-print" onClick={handlePrint}>
-                  🖨️ 打印报告
-                </button>
-              </div>
-            </div>
-
-            {/* 综合评分 */}
-            <div className="overall-section">
-              <div className="overall-score-card">
-                <span className="overall-label">综合评分</span>
-                <span className="overall-score" style={{ color: getLevelColor(parseFloat(getOverallScore(selectedChild.currentRadar))) }}>
-                  {getOverallScore(selectedChild.currentRadar)}
-                </span>
-                <span className="overall-level">
-                  等级 {Math.round(parseFloat(getOverallScore(selectedChild.currentRadar)))} · {LEVEL_LABELS[Math.round(parseFloat(getOverallScore(selectedChild.currentRadar)))] || '未知'}
-                </span>
-              </div>
-              <div className="overall-description">
-                {LEVEL_DESCRIPTIONS[Math.round(parseFloat(getOverallScore(selectedChild.currentRadar)))] || ''}
-              </div>
-            </div>
-
-            {/* 雷达图 */}
-            <div className="detail-radar">
-              <RadarChart data={selectedChild.currentRadar} size={320} />
-            </div>
-
-            {/* 三维度详细分析 */}
-            <div className="detail-dimensions">
-              <h3>📊 三维度详细分析</h3>
-              {Object.entries(DIMENSION_DETAILS).map(([dimKey, dimInfo]) => {
-                const dimScore = selectedChild.currentRadar[dimKey as keyof typeof selectedChild.currentRadar];
-                const latestAssessment = selectedChild.basePortrait?.assessments?.[selectedChild.basePortrait.assessments.length - 1];
-                return (
-                  <div key={dimKey} className="dimension-section">
-                    <div className="dimension-header">
-                      <span className="dimension-icon">{dimInfo.icon}</span>
-                      <span className="dimension-name">{dimInfo.name}</span>
-                      <span className="dimension-score" style={{ color: dimInfo.color }}>
-                        {dimScore.toFixed(1)} 分
-                      </span>
-                    </div>
-                    <div className="sub-dimensions">
-                      {dimInfo.subDimensions.map((sub) => {
-                        const subScore = getSubDimensionScore(latestAssessment, dimKey, sub.key);
-                        return (
-                          <div key={sub.key} className="sub-dimension-item">
-                            <div className="sub-dim-info">
-                              <span className="sub-dim-name">{sub.name}</span>
-                              <span className="sub-dim-desc">{sub.description}</span>
-                            </div>
-                            <div className="sub-dim-score-bar">
-                              <div 
-                                className="sub-dim-progress" 
-                                style={{ 
-                                  width: `${(subScore / 3) * 100}%`, 
-                                  background: getLevelColor(subScore) 
-                                }}
-                              />
-                              <span className="sub-dim-score-value" style={{ color: getLevelColor(subScore) }}>
-                                {subScore} 级
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-{/* 评估历史 */}
-            {selectedChild.basePortrait?.assessments?.length ? (
-              <div className="detail-history">
-                <h3>📋 评估历史记录</h3>
-                <div className="history-list">
-                  {selectedChild.basePortrait?.assessments.map((assessment, index) => (
-                    <div key={assessment.id || index} className="history-item">
-                      <div className="history-header">
-                        <span className="history-index">第 {index + 1} 次评估</span>
-                        <span className="history-date">
-                          {assessment.timestamp ? new Date(assessment.timestamp).toLocaleString('zh-CN') : '未知时间'}
-                        </span>
-                      </div>
-
-                      <div className="history-info-grid">
-                        <div className="history-info-item">
-                          <span className="info-label">评估场景</span>
-                          <span className="info-value">
-                            {SCENARIO_MAP[assessment.scenario || ''] || '🎨 智能故事角'}
-                          </span>
-                        </div>
-                        <div className="history-info-item">
-                          <span className="info-label">综合等级</span>
-                          <span className="info-value" style={{ color: getLevelColor(calculateLevelFromDimensions(assessment.dimensions)) }}>
-                            等级 {calculateLevelFromDimensions(assessment.dimensions)} · {LEVEL_LABELS[calculateLevelFromDimensions(assessment.dimensions)] || '未知'}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="history-content">
-                        <span className="content-label">叙事内容</span>
-                        <p className="content-text">{assessment.narrativeContent || '无内容记录'}</p>
-                      </div>
-
-                      <div className="history-dimensions">
-                        <div className="history-dim-row">
-                          <span>词句维度</span>
-                          <div className="dim-bars">
-                            <span>词汇:{assessment.dimensions.diction.vocabulary}</span>
-                            <span>句型:{assessment.dimensions.diction.sentenceStructure}</span>
-                          </div>
-                        </div>
-                        <div className="history-dim-row">
-                          <span>组织维度</span>
-                          <div className="dim-bars">
-                            <span>结构:{assessment.dimensions.organization.narrativeStructure}</span>
-                            <span>主题:{assessment.dimensions.organization.themeRelevance}</span>
-                            <span>扩展:{assessment.dimensions.organization.eventExpansion}</span>
-                            <span>表现:{assessment.dimensions.organization.expressiveness}</span>
-                          </div>
-                        </div>
-                        <div className="history-dim-row">
-                          <span>观点维度</span>
-                          <div className="dim-bars">
-                            <span>观点:{assessment.dimensions.opinion.narrativeViewpoint}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {assessment.suggestions && assessment.suggestions.length > 0 && (
-                        <div className="history-suggestions">
-                          <span className="suggestions-label">评估分析与建议</span>
-                          <ul className="suggestions-list">
-                            {assessment.suggestions.map((suggestion, sIndex) => (
-                              <li key={sIndex}>{suggestion}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
+          <PortraitDetail
+            portrait={selectedChild}
+            classNameMap={CLASS_NAME_MAP}
+            scenarioMap={SCENARIO_MAP}
+            onExport={handleExportPDF}
+            onPrint={handlePrint}
+          />
         ) : (
           <div className="portrait-placeholder">
             <span className="placeholder-icon">👶</span>

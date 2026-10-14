@@ -77,8 +77,15 @@ npm start            # = cd web && npx tsx server/index.ts
 - **样式治理**：本批将散落的页面内联 `<style>` 等价迁移到 `web/src/styles/*.css`
   （assess/dashboard/profile/class-stats/portrait/admin-users/components），由 `main.tsx` 统一引入，
   类名不变、功能等价；全局设计变量（配色/圆角/阴影/间距）集中在 `web/src/index.css` 的 `:root`。
-- **组件拆分**：本批**未**拆分大组件（PortraitPage / AdminUsersPage 保持单文件），留待后续批次。
-- **字体**：仍从 Google Fonts 拉取（`index.html` link），本地化留待后续批次。
+- **组件拆分（2026-10-14 工程收尾批）**：`PortraitPage.tsx` 拆分为 `PortraitList.tsx` / `PortraitDetail.tsx`
+  （含 `HistoryTimeline.tsx`），复用常量与导出 HTML 生成逻辑保留在页面内；`AdminUsersPage.tsx` 拆分为
+  `UserTable.tsx` / `AddUserModal.tsx` / `EditUserModal.tsx`。均新增到 `web/src/components/`，逻辑与展示分离，
+  与 `/portrait/:childId`（`useParams`）路由正确对接。
+- **字体（2026-10-14 工程收尾批）**：`index.html` 已移除 Google Fonts 引用；ZCOOL KuaiLe 通过
+  fontTools 子集化为 `web/public/fonts/ZCOOLKuaiLe-subset.woff2`（约 72KB），在 `web/src/index.css`
+  用本地 `@font-face` 引用；正文回退系统中文字体栈（`-apple-system/PingFang SC/Microsoft YaHei`）。
+  离线/国内网络可用，缺失时回退系统字体。导出报告 HTML（`generatePortraitHTML`/`generateReportHTML`）
+  内嵌的自包含 `<style>` 保留不动。
 
 ## 4. ⚠️ 硬性约束（违反会导致健康检查失败）
 
@@ -169,7 +176,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 | 功能 | 状态 | 原因 |
 |---|---|---|
-| 单文件上传 > 16MB | ❌ 平台限制 | 扣子部署后单文件上传上限 16MB，而 `/api/stt` 允许 30MB |
+| 单文件上传 > 16MB | ❌ 平台限制 | 扣子部署后单文件上传上限 16MB，`/api/stt` 已对齐至 15MB（见 §7.1），超限返回 413，前端本地预检并引导分段 |
 
 ### 7.1 语音能力（已接平台托管）
 
