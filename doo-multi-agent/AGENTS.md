@@ -228,6 +228,17 @@ curl -s -I $PUBLIC_URL/ | head -1
 - `📁 前端静态文件已托管: .../web/dist`
 - `🚀 DOO多智能体API服务运行在 http://localhost:<PORT>`
 
+### 8.1 部署构建坑：pnpm 10 拦截原生模块构建脚本
+平台构建/运行用的是 **pnpm v10**（部署日志 `[runtime_pkg]` 阶段可见 `Update available 10.x → 12.11.2`），而本地开发为 pnpm v9。
+pnpm v10 起**默认拦截依赖包的自定义构建脚本（postinstall/install）**，除非在 `package.json` 的 `pnpm.onlyBuiltDependencies` 白名单显式批准。
+本项目运行期强依赖以下**原生/自构建模块**，一旦被拦截，`require()` 会抛错导致服务起不来（本地 v9 默认放行所以本地正常、线上失败）：
+- `bcrypt`（`install: node-gyp-build`，登录密码哈希必须）
+- `coze-coding-dev-sdk`（根依赖）
+- `esbuild` / `lightningcss`（vite 构建链，web 依赖）
+
+**修复方式**：在根 `package.json` 与 `web/package.json` 各声明 `pnpm.onlyBuiltDependencies` 白名单（根放 `bcrypt`/`coze-coding-dev-sdk`，web 放 `esbuild`/`lightningcss`）。新增此类原生依赖时记得同步加白名单；不要用 `--no-optional` 或删除构建脚本绕过。
+**提醒**：`pnpm v9` 不会把该字段写进 lockfile（v10 才写），但 pnpm v10 始终以 `package.json` 为权威源读取，平台 `--frozen-lockfile` 下仍生效，无需强制升级 lockfileVersion。
+
 ## 9. 安全与访问控制
 
 服务端访问控制位于 `web/server/index.ts` 文件头部（有明确的起止注释标记），分三层：

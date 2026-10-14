@@ -41,5 +41,11 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "bcrypt",
+      "coze-coding-dev-sdk"
+    ]
   }
 }
