@@ -285,14 +285,32 @@ app.use(bodyParser.json());
 const system = new DOOMultiAgentSystem();
 
 // 初始化系统
+// 注意：这里必须做异常兜底 —— 生产环境平台注入 DATABASE_URL 后，
+// seedDefault* 会对 PostgreSQL 建表/写账号。若库不可达、表结构不符或权限不足，
+// 任何一次抛错都会形成 unhandledRejection，Node 默认行为是让进程退出，
+// 导致 app.listen 已执行却瞬间崩溃、健康检查失败。因此必须捕获并只告警，
+// 保证初始化失败不阻止服务存活、/api/health 始终可探活。
 system.initialize().then(async () => {
   console.log('✅ DOO多智能体系统服务已启动');
-  const pg = getPostgres();
-  if (pg) {
-    await pg.seedDefaultClasses();
-    await pg.seedDefaultScenarios();
+  try {
+    const pg = getPostgres();
+    if (pg) {
+      await pg.seedDefaultClasses();
+      await pg.seedDefaultScenarios();
+    }
+    await seedDefaultUsers();
+  } catch (err) {
+    console.error(
+      '⚠️ 启动期初始化（默认班级/场景/账号写入）失败，已跳过；应用保持可用:',
+      err instanceof Error ? err.message : err
+    );
   }
-  await seedDefaultUsers();
+}).catch((err: unknown) => {
+  // system.initialize() 自身的失败（如 initPromise 被拒）也捕获，避免进程退出。
+  console.error(
+    '❌ 系统初始化失败，应用仍保持监听（/api/health 可用）:',
+    err instanceof Error ? err.message : err
+  );
 });
 
 // 健康检查
