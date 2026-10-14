@@ -62,6 +62,24 @@ npm start            # = cd web && npx tsx server/index.ts
   绑定 0.0.0.0）。run 脚本从 `.preview` 读端口，未 hardcode。
 - `.gitignore` 已加 `.preview`。
 
+## 3.6 前端：hash 路由 + 响应式布局 + 全局样式基础（2026-10-14 批次）
+
+- **路由**：`web/src/App.tsx` 使用 `HashRouter`（react-router-dom v7），
+  页面切换从 `useState` 改为路由；支持前进/后退、刷新停留在当前页、链接可分享。
+  路由表：`/`（Dashboard）、`/assess`（AssessPage）、`/portraits`（PortraitPage）、
+  `/portrait/:childId`（PortraitPage，`useParams` 自动选中幼儿）、
+  `/class-stats`、`/profile`、`/admin-users`、`/admin-config`，`*` → 重定向 `/`。
+- **SPA fallback**：`web/server/index.ts:1392-1398` 用 `express.static` 托管 `web/dist`，
+  仅对非 `/api` 路径回落 `index.html`；`/api/*` 未命中 → 统一 404。hash 路由兼容静态托管。
+- **响应式**：`<900px` 侧边栏隐藏，改为 `Sidebar.tsx` 顶部抽屉导航（`.mobile-topbar` /
+  `.mobile-drawer-overlay` / `.sidebar.open`），`App.css:271` 起定义断点；
+  各页面 CSS（`web/src/styles/*.css`）含 `<1024px` 栅格塌缩与 `<600/480px` 触控尺寸适配。
+- **样式治理**：本批将散落的页面内联 `<style>` 等价迁移到 `web/src/styles/*.css`
+  （assess/dashboard/profile/class-stats/portrait/admin-users/components），由 `main.tsx` 统一引入，
+  类名不变、功能等价；全局设计变量（配色/圆角/阴影/间距）集中在 `web/src/index.css` 的 `:root`。
+- **组件拆分**：本批**未**拆分大组件（PortraitPage / AdminUsersPage 保持单文件），留待后续批次。
+- **字体**：仍从 Google Fonts 拉取（`index.html` link），本地化留待后续批次。
+
 ## 4. ⚠️ 硬性约束（违反会导致健康检查失败）
 
 1. **端口必须用平台注入的环境变量**，不要写死：

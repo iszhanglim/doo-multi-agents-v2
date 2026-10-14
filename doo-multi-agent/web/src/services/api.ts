@@ -1,6 +1,8 @@
 import type { ChildPortrait, NarrativeInput, AssessmentRunResult } from '../types';
 
-const API_BASE = import.meta.env.PROD ? '/api' : 'http://127.0.0.1:3001/api';
+// 前端与后端同源部署（express 服务静态产物 + /api 接口均在 5000 端口），统一使用相对路径。
+// 不硬编码域名 / IP / 端口，避免与部署端口或本机地址耦合。
+const API_BASE = '/api';
 
 /** 登录令牌（服务端 HMAC 签名），管理类接口靠它做角色校验 */
 const TOKEN_KEY = 'doo_token';
@@ -103,4 +105,23 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  // ========== 班级管理 API ==========
+  getClasses: () => fetchApi<{ success: boolean; classes: Array<{ id: string; name: string }> }>('/classes'),
+  createClass: (data: { id: string; name: string }) =>
+    fetchApi<{ success: boolean }>('/classes', { method: 'POST', body: JSON.stringify(data) }),
+  updateClass: (id: string, name: string) =>
+    fetchApi<{ success: boolean }>(`/classes/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ name }) }),
+  deleteClass: (id: string) =>
+    fetchApi<{ success: boolean }>(`/classes/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  // ========== 场景库 API ==========
+  getScenarios: () =>
+    fetchApi<{ success: boolean; scenarios: Array<{ id: string; label: string; description: string; enabled: boolean }> }>('/scenarios'),
+  createScenario: (data: { id: string; label: string; description?: string }) =>
+    fetchApi<{ success: boolean }>('/scenarios', { method: 'POST', body: JSON.stringify(data) }),
+  updateScenario: (id: string, data: { label?: string; description?: string; enabled?: boolean }) =>
+    fetchApi<{ success: boolean }>(`/scenarios/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteScenario: (id: string) =>
+    fetchApi<{ success: boolean }>(`/scenarios/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 };

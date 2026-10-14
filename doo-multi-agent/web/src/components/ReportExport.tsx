@@ -181,25 +181,6 @@ const ReportExport: React.FC<ReportExportProps> = ({ childName, assessment }) =>
           🖨️ 打印报告
         </button>
       </div>
-
-      <style>{`
-        .report-export {
-          margin-top: 20px;
-          padding-top: 20px;
-          border-top: 1px solid var(--border);
-        }
-
-        .report-export h3 {
-          font-size: 16px;
-          margin-bottom: 14px;
-          color: var(--text-primary);
-        }
-
-        .export-actions {
-          display: flex;
-          gap: 12px;
-        }
-      `}</style>
     </div>
   );
 };

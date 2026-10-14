@@ -173,6 +173,14 @@ export class DOOMultiAgentSystem {
       case 'journey_podcast':
         result = await this.journeyPodcast.run(input);
         break;
+      // 新增可配置场景一律走通用叙事编排（与智能故事角同一套 D 博士/小欧/多多协同流程），
+      // 仅以场景标签区分为不同测评情境，不各自硬造一套 agent 编排。
+      case 'morning_check_in':
+      case 'area_activity':
+      case 'outdoor_sport':
+      case 'daily_life':
+        result = await this.smartStoryCorner.run(input);
+        break;
       default:
         throw new Error(`Unknown scenario: ${scenario}`);
     }

@@ -243,11 +243,33 @@ function stableChildId(childName: string, classId: string): string {
  * 场景值来自请求体/路径参数，此前一律 `as ScenarioType` 纯类型断言，
  * 非法值会一路穿到 `runScenario` 的 default 分支抛错，最终以 500 返回（应为 400）。
  */
-const SCENARIO_TYPES = ['smart_story_corner', 'narrative_train', 'journey_podcast'] as const;
+const SCENARIO_TYPES = [
+  'smart_story_corner',
+  'narrative_train',
+  'journey_podcast',
+  'morning_check_in',
+  'area_activity',
+  'outdoor_sport',
+  'daily_life',
+] as const;
 type ScenarioTypeName = (typeof SCENARIO_TYPES)[number];
 
 function isScenarioType(value: unknown): value is ScenarioTypeName {
   return typeof value === 'string' && (SCENARIO_TYPES as readonly string[]).includes(value);
+}
+
+const SCENARIO_LABELS: Record<ScenarioTypeName, string> = {
+  smart_story_corner: '智慧故事角',
+  narrative_train: '叙事小火车',
+  journey_podcast: '奇妙旅行',
+  morning_check_in: '入园晨检',
+  area_activity: '区域活动',
+  outdoor_sport: '户外/体育游戏',
+  daily_life: '生活活动（进餐/午睡）',
+};
+
+function getScenarioLabel(type: ScenarioTypeName): string {
+  return SCENARIO_LABELS[type] ?? type;
 }
 
 /** 单次叙事文本上限（字）。超长文本会直接进入 LLM prompt，撑大 token 与内存 */
@@ -265,6 +287,11 @@ const system = new DOOMultiAgentSystem();
 // 初始化系统
 system.initialize().then(async () => {
   console.log('✅ DOO多智能体系统服务已启动');
+  const pg = getPostgres();
+  if (pg) {
+    await pg.seedDefaultClasses();
+    await pg.seedDefaultScenarios();
+  }
   await seedDefaultUsers();
 });
 
@@ -946,6 +973,152 @@ app.post('/api/auth/user/:username/password', requireAdmin, async (req, res) => 
   }
 });
 
+// ========== 班级管理 API ==========
+// 所有已登录用户可读班级列表；admin 可增删改
+app.get('/api/classes', requireAuth, async (req, res) => {
+  const pg = getPostgres();
+  if (!pg) {
+    // 本地 JSON 模式：返回内置默认班级供测评/统计下拉使用（不持久化）
+    return res.json({
+      success: true,
+      classes: [
+        { id: 'class_001', name: '大班一班' },
+        { id: 'class_002', name: '大班二班' },
+        { id: 'class_003', name: '大班三班' },
+        { id: 'class_004', name: '大班四班' },
+      ],
+    });
+  }
+  try {
+    const rows = await pg.listClasses();
+    res.json({ success: true, classes: rows.map((r) => ({ id: r.class_id, name: r.name })) });
+  } catch (error) {
+    res.status(500).json({ error: '获取班级列表失败', message: (error as Error).message });
+  }
+});
+
+app.post('/api/classes', requireAdmin, async (req, res) => {
+  const pg = getPostgres();
+  if (!pg) return res.status(503).json({ error: '当前为本地模式，无法新增班级' });
+  try {
+    const { id, name } = req.body ?? {};
+    if (typeof id !== 'string' || !id.trim() || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: '缺少班级 id 或名称' });
+    }
+    if (!/^[A-Za-z0-9_\-]+$/.test(id)) {
+      return res.status(400).json({ error: '班级 id 仅支持字母/数字/下划线/横线' });
+    }
+    const ok = await pg.createClass(id.trim(), name.trim());
+    if (!ok) return res.status(409).json({ error: '班级已存在或创建失败' });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: '新增班级失败', message: (error as Error).message });
+  }
+});
+
+app.put('/api/classes/:id', requireAdmin, async (req, res) => {
+  const pg = getPostgres();
+  if (!pg) return res.status(503).json({ error: '当前为本地模式，无法修改班级' });
+  try {
+    const { name } = req.body ?? {};
+    if (typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: '缺少班级名称' });
+    }
+    const ok = await pg.updateClass(req.params.id, { name: name.trim() });
+    if (!ok) return res.status(404).json({ error: '班级不存在' });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: '修改班级失败', message: (error as Error).message });
+  }
+});
+
+app.delete('/api/classes/:id', requireAdmin, async (req, res) => {
+  const pg = getPostgres();
+  if (!pg) return res.status(503).json({ error: '当前为本地模式，无法删除班级' });
+  try {
+    const ok = await pg.deleteClass(req.params.id);
+    if (!ok) return res.status(404).json({ error: '班级不存在' });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: '删除班级失败', message: (error as Error).message });
+  }
+});
+
+// ========== 场景库 API ==========
+// 所有已登录用户可读场景列表；admin 可增删改
+app.get('/api/scenarios', requireAuth, async (req, res) => {
+  const pg = getPostgres();
+  if (!pg) {
+    // 本地 JSON 模式：返回内置场景（不持久化）
+    return res.json({
+      success: true,
+      scenarios: SCENARIO_TYPES.map((id) => ({ id, label: getScenarioLabel(id), description: '', enabled: true })),
+    });
+  }
+  try {
+    const rows = await pg.listScenarios();
+    res.json({
+      success: true,
+      scenarios: rows.map((r) => ({ id: r.scenario_id, label: r.label, description: r.description, enabled: r.enabled })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: '获取场景列表失败', message: (error as Error).message });
+  }
+});
+
+app.post('/api/scenarios', requireAdmin, async (req, res) => {
+  const pg = getPostgres();
+  if (!pg) return res.status(503).json({ error: '当前为本地模式，无法新增场景' });
+  try {
+    const { id, label, description } = req.body ?? {};
+    if (typeof id !== 'string' || !id.trim() || typeof label !== 'string' || !label.trim()) {
+      return res.status(400).json({ error: '缺少场景 id 或名称' });
+    }
+    if (!/^[A-Za-z0-9_\-]+$/.test(id)) {
+      return res.status(400).json({ error: '场景 id 仅支持字母/数字/下划线/横线' });
+    }
+    const ok = await pg.createScenario({
+      scenario_id: id.trim(),
+      label: label.trim(),
+      description: typeof description === 'string' ? description.trim() : '',
+      enabled: true,
+    });
+    if (!ok) return res.status(409).json({ error: '场景已存在或创建失败' });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: '新增场景失败', message: (error as Error).message });
+  }
+});
+
+app.put('/api/scenarios/:id', requireAdmin, async (req, res) => {
+  const pg = getPostgres();
+  if (!pg) return res.status(503).json({ error: '当前为本地模式，无法修改场景' });
+  try {
+    const { label, description, enabled } = req.body ?? {};
+    const updates: { label?: string; description?: string; enabled?: boolean } = {};
+    if (typeof label === 'string' && label.trim()) updates.label = label.trim();
+    if (typeof description === 'string') updates.description = description.trim();
+    if (typeof enabled === 'boolean') updates.enabled = enabled;
+    const ok = await pg.updateScenario(req.params.id, updates);
+    if (!ok) return res.status(404).json({ error: '场景不存在' });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: '修改场景失败', message: (error as Error).message });
+  }
+});
+
+app.delete('/api/scenarios/:id', requireAdmin, async (req, res) => {
+  const pg = getPostgres();
+  if (!pg) return res.status(503).json({ error: '当前为本地模式，无法删除场景' });
+  try {
+    const ok = await pg.deleteScenario(req.params.id);
+    if (!ok) return res.status(404).json({ error: '场景不存在' });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: '删除场景失败', message: (error as Error).message });
+  }
+});
+
 // 启动时创建默认管理员
 async function seedDefaultUsers() {
   const pg = getPostgres();
@@ -1159,10 +1332,18 @@ function detectAudioExt(buf: Buffer): string {
 
 // 上限与平台一致（部署后单文件 16MB）：超过时在应用层返回可读错误，
 // 而不是被平台层直接拒收（那样前端只能拿到不可读的失败）。
-app.post('/api/stt', express.raw({ type: () => true, limit: '16mb' }), async (req, res) => {
+// 平台请求体上限约 16MB。录音统一压到 15MB 以内，留出余量；超限给出明确提示而非静默失败。
+const MAX_STT_BYTES = 15 * 1024 * 1024;
+app.post('/api/stt', express.raw({ type: () => true, limit: '15mb' }), async (req, res) => {
   const audio = req.body as Buffer;
   if (!Buffer.isBuffer(audio) || audio.length < 1000) {
     return res.status(400).json({ error: '音频数据无效或太短' });
+  }
+  if (audio.length > MAX_STT_BYTES) {
+    return res.status(413).json({
+      error: '录音文件超过 15MB 上限，请分段录制后重试（例如控制在 10 分钟以内）',
+      limitMB: 15,
+    });
   }
 
   // 按真实内容决定扩展名，避免格式与后缀不匹配导致解码失败

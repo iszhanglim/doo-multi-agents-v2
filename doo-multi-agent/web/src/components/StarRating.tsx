@@ -33,30 +33,6 @@ const StarRating: React.FC<StarRatingProps> = ({ score, size = 18, showScore = t
           <span className="star-score" style={{ color: getColor(score) }}>{rounded}分</span>
         </div>
       )}
-
-      <style>{`
-        .star-rating {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 2px;
-        }
-        .stars {
-          line-height: 1;
-          letter-spacing: 3px;
-          text-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        }
-        .star-info {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 1px;
-        }
-        .star-score {
-          font-size: 16px;
-          font-weight: 700;
-        }
-      `}</style>
     </div>
   );
 };

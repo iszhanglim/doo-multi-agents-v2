@@ -1,22 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import RadarChart from '../components/RadarChart';
+
 import { usePortraits } from '../hooks/usePortraits';
+import { useClasses } from '../hooks/useClasses';
+import { useScenarios } from '../hooks/useScenarios';
 import { useAuth } from '../context/AuthContext';
-import { calculateLevelFromDimensions, getLevelColor } from '../utils/levelCalculator';
+import { getLevelColor, calculateLevelFromDimensions } from '../utils/levelCalculator';
 import type { ChildPortrait, DOOAssessment } from '../types';
-
-const CLASS_NAME_MAP: Record<string, string> = {
-  'class_001': '大班一班',
-  'class_002': '大班二班',
-  'class_003': '大班三班',
-  'class_004': '大班四班',
-};
-
-const SCENARIO_MAP: Record<string, string> = {
-  'smart_story_corner': '🎨 智能故事角',
-  'narrative_train': '🚂 叙事火车',
-  'journey_podcast': '🎭 西游播客',
-};
 
 const LEVEL_LABELS: Record<number, string> = {
   1: '初级·需支持',
@@ -68,14 +59,35 @@ const DIMENSION_DETAILS = {
 
 const PortraitPage: React.FC = () => {
   const { user } = useAuth();
+  const { childId } = useParams();
   const { portraits, loading, deletePortrait } = usePortraits();
+  const { classes } = useClasses();
+  const { scenarios } = useScenarios();
   const [selectedChild, setSelectedChild] = useState<ChildPortrait | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [deleting, setDeleting] = useState(false);
 
+  const CLASS_NAME_MAP = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    classes.forEach((c) => { map[c.id] = c.name; });
+    return map;
+  }, [classes]);
+
+  const SCENARIO_MAP = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    scenarios.forEach((s) => { map[s.id] = s.label; });
+    return map;
+  }, [scenarios]);
+
   const filteredPortraits = portraits.filter((p) =>
     p.name?.includes(searchTerm) || p.childId?.includes(searchTerm)
   );
+
+  useEffect(() => {
+    if (!childId || !portraits.length) return;
+    const target = portraits.find((p) => p.childId === childId);
+    if (target) setSelectedChild(target);
+  }, [childId, portraits]);
 
   const getOverallScore = (radar: ChildPortrait['currentRadar']) => {
     return ((radar.diction + radar.organization + radar.opinion) / 3).toFixed(1);
@@ -453,12 +465,12 @@ const PortraitPage: React.FC = () => {
               })}
             </div>
 
-            {/* 评估历史 */}
-            {selectedChild.basePortrait?.assessments && selectedChild.basePortrait.assessments.length > 0 && (
+{/* 评估历史 */}
+            {selectedChild.basePortrait?.assessments?.length ? (
               <div className="detail-history">
                 <h3>📋 评估历史记录</h3>
                 <div className="history-list">
-                  {selectedChild.basePortrait.assessments.map((assessment, index) => (
+                  {selectedChild.basePortrait?.assessments.map((assessment, index) => (
                     <div key={assessment.id || index} className="history-item">
                       <div className="history-header">
                         <span className="history-index">第 {index + 1} 次评估</span>
@@ -468,67 +480,65 @@ const PortraitPage: React.FC = () => {
                       </div>
 
                       <div className="history-info-grid">
-                            <div className="history-info-item">
-                              <span className="info-label">评估场景</span>
-                              <span className="info-value">
-                                {SCENARIO_MAP[assessment.scenario || ''] || '🎨 智能故事角'}
-                              </span>
-                            </div>
-                            <div className="history-info-item">
-                              <span className="info-label">综合等级</span>
-                              <span className="info-value" style={{ color: getLevelColor(calculateLevelFromDimensions(assessment.dimensions)) }}>
-                                等级 {calculateLevelFromDimensions(assessment.dimensions)} · {LEVEL_LABELS[calculateLevelFromDimensions(assessment.dimensions)] || '未知'}
-                              </span>
-                            </div>
-                          </div>
+                        <div className="history-info-item">
+                          <span className="info-label">评估场景</span>
+                          <span className="info-value">
+                            {SCENARIO_MAP[assessment.scenario || ''] || '🎨 智能故事角'}
+                          </span>
+                        </div>
+                        <div className="history-info-item">
+                          <span className="info-label">综合等级</span>
+                          <span className="info-value" style={{ color: getLevelColor(calculateLevelFromDimensions(assessment.dimensions)) }}>
+                            等级 {calculateLevelFromDimensions(assessment.dimensions)} · {LEVEL_LABELS[calculateLevelFromDimensions(assessment.dimensions)] || '未知'}
+                          </span>
+                        </div>
+                      </div>
 
-                          <div className="history-content">
-                            <span className="content-label">叙事内容</span>
-                            <p className="content-text">{assessment.narrativeContent || '无内容记录'}</p>
-                          </div>
+                      <div className="history-content">
+                        <span className="content-label">叙事内容</span>
+                        <p className="content-text">{assessment.narrativeContent || '无内容记录'}</p>
+                      </div>
 
-                          {/* 详细维度得分 */}
-                          <div className="history-dimensions">
-                            <div className="history-dim-row">
-                              <span>词句维度</span>
-                              <div className="dim-bars">
-                                <span>词汇:{assessment.dimensions.diction.vocabulary}</span>
-                                <span>句型:{assessment.dimensions.diction.sentenceStructure}</span>
-                              </div>
-                            </div>
-                            <div className="history-dim-row">
-                              <span>组织维度</span>
-                              <div className="dim-bars">
-                                <span>结构:{assessment.dimensions.organization.narrativeStructure}</span>
-                                <span>主题:{assessment.dimensions.organization.themeRelevance}</span>
-                                <span>扩展:{assessment.dimensions.organization.eventExpansion}</span>
-                                <span>表现:{assessment.dimensions.organization.expressiveness}</span>
-                              </div>
-                            </div>
-                            <div className="history-dim-row">
-                              <span>观点维度</span>
-                              <div className="dim-bars">
-                                <span>观点:{assessment.dimensions.opinion.narrativeViewpoint}</span>
-                              </div>
-                            </div>
+                      <div className="history-dimensions">
+                        <div className="history-dim-row">
+                          <span>词句维度</span>
+                          <div className="dim-bars">
+                            <span>词汇:{assessment.dimensions.diction.vocabulary}</span>
+                            <span>句型:{assessment.dimensions.diction.sentenceStructure}</span>
                           </div>
+                        </div>
+                        <div className="history-dim-row">
+                          <span>组织维度</span>
+                          <div className="dim-bars">
+                            <span>结构:{assessment.dimensions.organization.narrativeStructure}</span>
+                            <span>主题:{assessment.dimensions.organization.themeRelevance}</span>
+                            <span>扩展:{assessment.dimensions.organization.eventExpansion}</span>
+                            <span>表现:{assessment.dimensions.organization.expressiveness}</span>
+                          </div>
+                        </div>
+                        <div className="history-dim-row">
+                          <span>观点维度</span>
+                          <div className="dim-bars">
+                            <span>观点:{assessment.dimensions.opinion.narrativeViewpoint}</span>
+                          </div>
+                        </div>
+                      </div>
 
-                          {/* 评估分析 */}
-                          {assessment.suggestions && assessment.suggestions.length > 0 && (
-                            <div className="history-suggestions">
-                              <span className="suggestions-label">评估分析与建议</span>
-                              <ul className="suggestions-list">
-                                {assessment.suggestions.map((suggestion, sIndex) => (
-                                  <li key={sIndex}>{suggestion}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
+                      {assessment.suggestions && assessment.suggestions.length > 0 && (
+                        <div className="history-suggestions">
+                          <span className="suggestions-label">评估分析与建议</span>
+                          <ul className="suggestions-list">
+                            {assessment.suggestions.map((suggestion, sIndex) => (
+                              <li key={sIndex}>{suggestion}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         ) : (
           <div className="portrait-placeholder">
@@ -537,590 +547,6 @@ const PortraitPage: React.FC = () => {
           </div>
         )}
       </div>
-
-      <style>{`
-        .portrait-page {
-          max-width: 1200px;
-          margin: 0 auto;
-        }
-
-        .page-header {
-          margin-bottom: 32px;
-        }
-
-        .page-header h1 {
-          font-size: 28px;
-          margin-bottom: 8px;
-        }
-
-        .page-header p {
-          color: var(--text-secondary);
-          font-size: 15px;
-        }
-
-        .portrait-layout {
-          display: grid;
-          grid-template-columns: 320px 1fr;
-          gap: 28px;
-          align-items: start;
-        }
-
-        .children-list-container {
-          position: sticky;
-          top: 32px;
-        }
-
-        .search-box {
-          position: relative;
-          margin-bottom: 16px;
-        }
-
-        .search-icon {
-          position: absolute;
-          left: 14px;
-          top: 50%;
-          transform: translateY(-50%);
-          font-size: 16px;
-          z-index: 1;
-        }
-
-        .search-box input {
-          padding-left: 42px;
-        }
-
-        .loading-text {
-          text-align: center;
-          padding: 40px;
-          color: var(--text-light);
-        }
-
-        .children-grid {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-        }
-
-        .child-card {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 14px 16px;
-          background: white;
-          border: 2px solid transparent;
-          border-radius: var(--radius-md);
-          transition: all 0.3s ease;
-        }
-
-        .child-card:hover {
-          border-color: var(--primary-light);
-          transform: translateX(4px);
-        }
-
-        .child-card.active {
-          border-color: var(--primary);
-          background: linear-gradient(135deg, rgba(255, 140, 66, 0.05) 0%, rgba(107, 91, 149, 0.05) 100%);
-        }
-
-        .child-card-main {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          background: none;
-          border: none;
-          cursor: pointer;
-          text-align: left;
-          font-family: inherit;
-          padding: 0;
-        }
-
-        .child-delete-btn {
-          width: 32px;
-          height: 32px;
-          border-radius: 8px;
-          border: none;
-          background: #FEE2E2;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 14px;
-          transition: all 0.2s ease;
-          flex-shrink: 0;
-        }
-
-        .child-delete-btn:hover {
-          background: #FECACA;
-          transform: scale(1.1);
-        }
-
-        .child-delete-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .child-avatar {
-          width: 44px;
-          height: 44px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, var(--primary-light), var(--secondary-light));
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-weight: 600;
-          font-size: 16px;
-          flex-shrink: 0;
-        }
-
-        .child-info {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-        }
-
-        .child-name {
-          font-weight: 600;
-          font-size: 15px;
-          color: var(--text-primary);
-        }
-
-        .child-score {
-          font-size: 13px;
-          color: var(--text-secondary);
-        }
-
-        .child-level-dot {
-          width: 10px;
-          height: 10px;
-          border-radius: 50%;
-          flex-shrink: 0;
-        }
-
-        .portrait-detail {
-          background: white;
-          border-radius: var(--radius-lg);
-          padding: 32px;
-          box-shadow: var(--shadow-soft);
-          animation: fadeInUp 0.5s ease-out;
-        }
-
-        .detail-header {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          margin-bottom: 24px;
-          padding-bottom: 20px;
-          border-bottom: 2px solid var(--border);
-        }
-
-        .detail-avatar {
-          width: 64px;
-          height: 64px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, var(--primary), var(--secondary));
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-weight: 700;
-          font-size: 24px;
-        }
-
-        .detail-info {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-
-        .detail-info h2 {
-          font-size: 22px;
-          color: var(--text-primary);
-        }
-
-        .detail-meta {
-          font-size: 13px;
-          color: var(--text-secondary);
-        }
-
-        .detail-actions {
-          display: flex;
-          gap: 10px;
-        }
-
-        .btn-export, .btn-print {
-          padding: 10px 18px;
-          border-radius: var(--radius-md);
-          border: none;
-          font-size: 14px;
-          cursor: pointer;
-          font-family: inherit;
-          transition: all 0.2s ease;
-          font-weight: 500;
-        }
-
-        .btn-export {
-          background: linear-gradient(135deg, var(--primary-light), var(--secondary-light));
-          color: white;
-        }
-
-        .btn-export:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(255, 140, 66, 0.3);
-        }
-
-        .btn-print {
-          background: var(--bg-warm);
-          color: var(--text-primary);
-          border: 1px solid var(--border);
-        }
-
-        .btn-print:hover {
-          background: var(--border);
-        }
-
-        .overall-section {
-          background: linear-gradient(135deg, rgba(255, 140, 66, 0.05) 0%, rgba(107, 91, 149, 0.05) 100%);
-          border-radius: var(--radius-lg);
-          padding: 24px;
-          margin-bottom: 24px;
-          display: grid;
-          grid-template-columns: 200px 1fr;
-          gap: 24px;
-          align-items: center;
-        }
-
-        .overall-score-card {
-          text-align: center;
-          padding: 20px;
-          background: white;
-          border-radius: var(--radius-md);
-          box-shadow: var(--shadow-soft);
-        }
-
-        .overall-label {
-          display: block;
-          font-size: 14px;
-          color: var(--text-secondary);
-          margin-bottom: 8px;
-        }
-
-        .overall-score {
-          display: block;
-          font-size: 48px;
-          font-weight: 700;
-          line-height: 1;
-          margin-bottom: 8px;
-        }
-
-        .overall-level {
-          display: block;
-          font-size: 14px;
-          color: var(--text-secondary);
-          font-weight: 500;
-        }
-
-        .overall-description {
-          font-size: 15px;
-          line-height: 1.8;
-          color: var(--text-secondary);
-        }
-
-        .detail-radar {
-          display: flex;
-          justify-content: center;
-          padding: 20px 0;
-          margin-bottom: 24px;
-        }
-
-        .detail-dimensions h3 {
-          font-size: 18px;
-          margin-bottom: 20px;
-          color: var(--text-primary);
-          padding-bottom: 10px;
-          border-bottom: 2px solid var(--border);
-        }
-
-        .dimension-section {
-          background: var(--bg-warm);
-          border-radius: var(--radius-lg);
-          padding: 20px;
-          margin-bottom: 16px;
-        }
-
-        .dimension-header {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-bottom: 16px;
-        }
-
-        .dimension-icon {
-          font-size: 24px;
-        }
-
-        .dimension-name {
-          flex: 1;
-          font-size: 16px;
-          font-weight: 600;
-          color: var(--text-primary);
-        }
-
-        .dimension-score {
-          font-size: 20px;
-          font-weight: 700;
-        }
-
-        .sub-dimensions {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-
-        .sub-dimension-item {
-          background: white;
-          border-radius: var(--radius-md);
-          padding: 14px 16px;
-        }
-
-        .sub-dim-info {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 8px;
-        }
-
-        .sub-dim-name {
-          font-weight: 600;
-          font-size: 14px;
-          color: var(--text-primary);
-        }
-
-        .sub-dim-desc {
-          font-size: 12px;
-          color: var(--text-light);
-          margin-left: 8px;
-        }
-
-        .sub-dim-score-bar {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .sub-dim-progress {
-          flex: 1;
-          height: 8px;
-          border-radius: 4px;
-          transition: width 0.5s ease;
-        }
-
-        .sub-dim-score-value {
-          font-size: 14px;
-          font-weight: 600;
-          min-width: 40px;
-          text-align: right;
-        }
-
-        .detail-history {
-          margin-top: 32px;
-        }
-
-        .detail-history h3 {
-          font-size: 18px;
-          margin-bottom: 20px;
-          color: var(--text-primary);
-          padding-bottom: 10px;
-          border-bottom: 2px solid var(--border);
-        }
-
-        .history-list {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-
-        .history-item {
-          background: var(--bg-warm);
-          border-radius: var(--radius-lg);
-          padding: 24px;
-          border-left: 4px solid var(--secondary);
-        }
-
-        .history-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 16px;
-        }
-
-        .history-index {
-          font-size: 15px;
-          font-weight: 600;
-          color: var(--text-primary);
-        }
-
-        .history-date {
-          font-size: 13px;
-          color: var(--text-light);
-        }
-
-        .history-info-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 12px;
-          margin-bottom: 16px;
-        }
-
-        .history-info-item {
-          background: white;
-          padding: 12px;
-          border-radius: var(--radius-sm);
-        }
-
-        .history-info-item .info-label {
-          display: block;
-          font-size: 12px;
-          color: var(--text-light);
-          margin-bottom: 4px;
-        }
-
-        .history-info-item .info-value {
-          font-size: 14px;
-          font-weight: 600;
-          color: var(--text-primary);
-        }
-
-        .history-content {
-          margin-bottom: 16px;
-        }
-
-        .content-label {
-          display: block;
-          font-size: 13px;
-          color: var(--text-secondary);
-          font-weight: 600;
-          margin-bottom: 8px;
-        }
-
-        .content-text {
-          font-size: 14px;
-          line-height: 1.8;
-          color: var(--text-secondary);
-          padding: 14px;
-          background: white;
-          border-radius: var(--radius-md);
-          margin: 0;
-        }
-
-        .history-dimensions {
-          background: white;
-          border-radius: var(--radius-md);
-          padding: 14px;
-          margin-bottom: 16px;
-        }
-
-        .history-dim-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 8px 0;
-          border-bottom: 1px dashed var(--border);
-        }
-
-        .history-dim-row:last-child {
-          border-bottom: none;
-        }
-
-        .dim-bars {
-          display: flex;
-          gap: 12px;
-        }
-
-        .dim-bars span {
-          font-size: 12px;
-          padding: 4px 10px;
-          background: var(--bg-warm);
-          border-radius: 12px;
-          color: var(--text-secondary);
-        }
-
-        .history-suggestions {
-          background: white;
-          border-radius: var(--radius-md);
-          padding: 16px;
-        }
-
-        .suggestions-label {
-          display: block;
-          font-size: 13px;
-          color: var(--text-secondary);
-          font-weight: 600;
-          margin-bottom: 10px;
-        }
-
-        .suggestions-list {
-          list-style: none;
-          padding: 0;
-          margin: 0;
-        }
-
-        .suggestions-list li {
-          padding: 10px 14px;
-          background: linear-gradient(135deg, rgba(255, 140, 66, 0.08) 0%, rgba(107, 91, 149, 0.08) 100%);
-          border-radius: var(--radius-sm);
-          margin-bottom: 8px;
-          font-size: 13px;
-          line-height: 1.6;
-          color: var(--text-secondary);
-        }
-
-        .suggestions-list li:last-child {
-          margin-bottom: 0;
-        }
-
-        .portrait-placeholder {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          min-height: 400px;
-          background: white;
-          border-radius: var(--radius-lg);
-          box-shadow: var(--shadow-soft);
-          color: var(--text-light);
-        }
-
-        .placeholder-icon {
-          font-size: 64px;
-          margin-bottom: 16px;
-          opacity: 0.5;
-        }
-
-        @media (max-width: 1024px) {
-          .portrait-layout {
-            grid-template-columns: 1fr;
-          }
-          .children-list-container {
-            position: static;
-          }
-          .children-grid {
-            flex-direction: row;
-            flex-wrap: wrap;
-          }
-          .child-card {
-            flex: 1;
-            min-width: 140px;
-          }
-          .overall-section {
-            grid-template-columns: 1fr;
-          }
-          .history-info-grid {
-            grid-template-columns: 1fr;
-          }
-        }
-      `}</style>
     </div>
   );
 };

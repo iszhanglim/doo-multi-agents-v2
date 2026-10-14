@@ -29,8 +29,154 @@ export class PostgresStorage implements IPortraitStorage {
         avatar VARCHAR(16) DEFAULT '👩‍🏫',
         created_at TIMESTAMP DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS classes (
+        class_id VARCHAR(64) PRIMARY KEY,
+        name VARCHAR(64) NOT NULL,
+        sort_order INT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_classes_sort ON classes(sort_order);
+
+      CREATE TABLE IF NOT EXISTS scenarios (
+        scenario_id VARCHAR(64) PRIMARY KEY,
+        label VARCHAR(64) NOT NULL,
+        description VARCHAR(255) NOT NULL DEFAULT '',
+        enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        sort_order INT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_scenarios_sort ON scenarios(sort_order);
     `);
     console.log('✅ PostgreSQL 数据表初始化完成');
+  }
+
+  // ========== 班级管理 ==========
+
+  async listClasses(): Promise<Array<{ class_id: string; name: string; sort_order: number }>> {
+    const result = await this.pool.query('SELECT class_id, name, sort_order FROM classes ORDER BY sort_order, class_id');
+    return result.rows;
+  }
+
+  async getClass(classId: string): Promise<{ class_id: string; name: string } | null> {
+    const result = await this.pool.query('SELECT class_id, name FROM classes WHERE class_id = $1', [classId]);
+    return result.rows[0] || null;
+  }
+
+  async createClass(classId: string, name: string, sortOrder = 0): Promise<boolean> {
+    try {
+      await this.pool.query(
+        'INSERT INTO classes (class_id, name, sort_order) VALUES ($1, $2, $3)',
+        [classId, name, sortOrder]
+      );
+      return true;
+    } catch (error) {
+      console.error(`创建班级失败（classId=${classId}）:`, error instanceof Error ? error.message : error);
+      return false;
+    }
+  }
+
+  async updateClass(classId: string, updates: { name?: string; sort_order?: number }): Promise<boolean> {
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    let idx = 1;
+    for (const [key, val] of Object.entries(updates)) {
+      if (val === undefined) continue;
+      if (key !== 'name' && key !== 'sort_order') continue;
+      fields.push(`${key} = $${idx}`);
+      values.push(val);
+      idx++;
+    }
+    if (fields.length === 0) return false;
+    values.push(classId);
+    const result = await this.pool.query(`UPDATE classes SET ${fields.join(', ')} WHERE class_id = $${idx}`, values);
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async deleteClass(classId: string): Promise<boolean> {
+    const result = await this.pool.query('DELETE FROM classes WHERE class_id = $1', [classId]);
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async seedDefaultClasses(): Promise<void> {
+    const existing = await this.listClasses();
+    if (existing.length >= 4) return;
+    const defaults: Array<[string, string]> = [
+      ['class_001', '大班一班'],
+      ['class_002', '大班二班'],
+      ['class_003', '大班三班'],
+      ['class_004', '大班四班'],
+    ];
+    for (const [id, name] of defaults) {
+      const found = await this.getClass(id);
+      if (!found) await this.createClass(id, name, Number(id.slice(-1)));
+    }
+    console.log('👥 已确保默认班级存在');
+  }
+
+  // ========== 场景库管理 ==========
+
+  async listScenarios(): Promise<Array<{ scenario_id: string; label: string; description: string; enabled: boolean; sort_order: number }>> {
+    const result = await this.pool.query('SELECT scenario_id, label, description, enabled, sort_order FROM scenarios ORDER BY sort_order, scenario_id');
+    return result.rows;
+  }
+
+  async getScenario(scenarioId: string): Promise<{ scenario_id: string; label: string; enabled: boolean } | null> {
+    const result = await this.pool.query('SELECT scenario_id, label, enabled FROM scenarios WHERE scenario_id = $1', [scenarioId]);
+    return result.rows[0] || null;
+  }
+
+  async createScenario(scenario: { scenario_id: string; label: string; description: string; enabled?: boolean; sort_order?: number }): Promise<boolean> {
+    try {
+      await this.pool.query(
+        'INSERT INTO scenarios (scenario_id, label, description, enabled, sort_order) VALUES ($1, $2, $3, $4, $5)',
+        [scenario.scenario_id, scenario.label, scenario.description, scenario.enabled ?? true, scenario.sort_order ?? 0]
+      );
+      return true;
+    } catch (error) {
+      console.error(`创建场景失败（scenario=${scenario.scenario_id}）:`, error instanceof Error ? error.message : error);
+      return false;
+    }
+  }
+
+  async updateScenario(scenarioId: string, updates: { label?: string; description?: string; enabled?: boolean; sort_order?: number }): Promise<boolean> {
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    let idx = 1;
+    for (const [key, val] of Object.entries(updates)) {
+      if (val === undefined) continue;
+      fields.push(`${key} = $${idx}`);
+      values.push(val);
+      idx++;
+    }
+    if (fields.length === 0) return false;
+    values.push(scenarioId);
+    const result = await this.pool.query(`UPDATE scenarios SET ${fields.join(', ')} WHERE scenario_id = $${idx}`, values);
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async deleteScenario(scenarioId: string): Promise<boolean> {
+    const result = await this.pool.query('DELETE FROM scenarios WHERE scenario_id = $1', [scenarioId]);
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async seedDefaultScenarios(): Promise<void> {
+    const existing = await this.listScenarios();
+    if (existing.length >= 3) return;
+    const defaults: Array<[string, string, string]> = [
+      ['smart_story_corner', '智能故事角', '幼儿自主选择绘本讲述，多多陪伴互动'],
+      ['narrative_train', '叙事火车', '师幼集体叙事游戏，多多接力讲故事'],
+      ['journey_podcast', '西游播客', '亲子家庭叙事活动，多多倾听陪伴'],
+      ['morning_check_in', '入园晨检', '入园环节记录幼儿晨间表达与描述'],
+      ['area_activity', '区域活动', '区域活动中的自发言语与同伴交流'],
+      ['outdoor_sport', '户外/体育游戏', '户外体育游戏中的表达与规则讲述'],
+      ['daily_life', '生活活动（进餐/午睡）', '进餐、午睡等生活环节的叙事表达'],
+    ];
+    for (const [id, label, desc] of defaults) {
+      const found = await this.getScenario(id);
+      if (!found) await this.createScenario({ scenario_id: id, label, description: desc, enabled: true });
+    }
+    console.log('🎭 已确保默认场景库存在');
   }
 
   // ========== 用户管理 ==========

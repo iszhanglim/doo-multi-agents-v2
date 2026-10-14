@@ -8,24 +8,15 @@ import StarRating from '../components/StarRating';
 import VoiceInput from '../components/VoiceInput';
 import VoiceOutput from '../components/VoiceOutput';
 import type { DOOAssessment } from '../types';
-
-const CLASSES = [
-  { id: 'class_001', name: '大班一班' },
-  { id: 'class_002', name: '大班二班' },
-  { id: 'class_003', name: '大班三班' },
-  { id: 'class_004', name: '大班四班' },
-];
-
-const SCENARIOS = [
-  { id: 'smart_story_corner', label: '🎨 智能故事角', desc: '幼儿自主选择绘本讲述，多多陪伴互动' },
-  { id: 'narrative_train', label: '🚂 叙事火车', desc: '师幼集体叙事游戏，多多接力讲故事' },
-  { id: 'journey_podcast', label: '🎭 西游播客', desc: '亲子家庭叙事活动，多多倾听陪伴' },
-];
+import { useClasses } from '../hooks/useClasses';
+import { useScenarios } from '../hooks/useScenarios';
 
 const AssessPage: React.FC = () => {
   const { user } = useAuth();
   const { assessment, interactions, reflections, report, loading, error, assess, clearAssessment } = useAssessment();
   const conv = useConversation();
+  const { classes } = useClasses();
+  const { scenarios } = useScenarios();
   const [mode, setMode] = useState<'assess' | 'conversation'>('assess');
   const [childName, setChildName] = useState('');
   const [content, setContent] = useState('');
@@ -35,6 +26,9 @@ const AssessPage: React.FC = () => {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { if (user?.role === 'teacher' && user?.classId) setClassId(user.classId); }, [user]);
+  useEffect(() => {
+    if (classes.length > 0 && !user?.classId && !classes.some((c) => c.id === classId)) setClassId(classes[0].id);
+  }, [classes, user?.classId, classId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +44,10 @@ const AssessPage: React.FC = () => {
     setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   };
 
-  const currentScenario = SCENARIOS.find(s => s.id === scenario) || SCENARIOS[0];
+  const currentScenario = scenarios.find((s) => s.id === scenario) || scenarios[0]
+    || { id: scenario, label: '当前场景', description: '' };
+
+  const classLabel = (id: string) => classes.find((c) => c.id === id)?.name || id;
 
   return (
     <div className="assess-page animate-fade-in-up">
@@ -70,17 +67,17 @@ const AssessPage: React.FC = () => {
             <div className="assess-form">
               <div className="form-group"><label>幼儿姓名</label><input type="text" className="input-field" placeholder="请输入幼儿姓名" value={childName} onChange={(e) => setChildName(e.target.value)} /></div>
               <div className="form-group"><label>所属班级</label>
-                {user?.role === 'teacher' && user?.classId ? <input type="text" className="input-field" value={CLASSES.find(c => c.id === user.classId)?.name || user.classId} disabled readOnly />
-                  : <select className="input-field" value={classId} onChange={(e) => setClassId(e.target.value)}>{CLASSES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>}
+                {user?.role === 'teacher' && user?.classId ? <input type="text" className="input-field" value={classLabel(user.classId)} disabled readOnly />
+                  : <select className="input-field" value={classId} onChange={(e) => setClassId(e.target.value)}>{classes.length > 0 ? classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>) : <option value="">加载班级...</option>}</select>}
               </div>
               <div className="form-group"><label>评估场景</label>
-                <select className="input-field" value={scenario} onChange={(e) => setScenario(e.target.value)}>{SCENARIOS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
+                <select className="input-field" value={scenario} onChange={(e) => setScenario(e.target.value)}>{scenarios.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
               </div>
               {conv.status === 'idle' ? <button className="btn-primary" onClick={handleConvStart} disabled={!childName.trim() || conv.loading}>{conv.loading ? '⏳ 创建中...' : '🚀 开始对话'}</button>
                 : <button className="btn-secondary" onClick={conv.reset}>🔄 重新开始</button>}
               {conv.status === 'chatting' && <div className="conv-progress"><span>第 {conv.turnCount} / {conv.maxTurns} 轮</span><button className="btn-end" onClick={conv.end} disabled={conv.loading}>{conv.loading ? '评估中...' : '📊 结束并评估'}</button></div>}
             </div>
-            <div className="scenario-hint"><span className="scenario-hint-label">当前场景</span><span className="scenario-hint-text">{currentScenario.label}</span><span className="scenario-hint-desc">{currentScenario.desc}</span></div>
+            <div className="scenario-hint"><span className="scenario-hint-label">当前场景</span><span className="scenario-hint-text">{currentScenario.label}</span><span className="scenario-hint-desc">{currentScenario.description}</span></div>
           </div>
           <div className="conv-chat-area">
             {conv.status === 'idle' && <div className="conv-empty"><div className="conv-empty-icon">💬</div><p>输入幼儿姓名，选择场景，点击"开始对话"</p><p className="conv-empty-hint">多多会和孩子进行多轮对话，最后汇总评估</p></div>}
@@ -109,10 +106,10 @@ const AssessPage: React.FC = () => {
             <form onSubmit={handleSubmit} className="assess-form">
               <div className="form-group"><label>幼儿姓名</label><input type="text" className="input-field" placeholder="请输入幼儿姓名" value={childName} onChange={(e) => setChildName(e.target.value)} required /></div>
               <div className="form-group"><label>所属班级</label>
-                {user?.role === 'teacher' && user?.classId ? <input type="text" className="input-field" value={CLASSES.find(c => c.id === user.classId)?.name || user.classId} disabled readOnly />
-                  : <select className="input-field" value={classId} onChange={(e) => setClassId(e.target.value)}>{CLASSES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>}
+                {user?.role === 'teacher' && user?.classId ? <input type="text" className="input-field" value={classLabel(user.classId)} disabled readOnly />
+                  : <select className="input-field" value={classId} onChange={(e) => setClassId(e.target.value)}>{classes.length > 0 ? classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>) : <option value="">加载班级...</option>}</select>}
               </div>
-              <div className="form-group"><label>评估场景</label><select className="input-field" value={scenario} onChange={(e) => setScenario(e.target.value)}>{SCENARIOS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
+              <div className="form-group"><label>评估场景</label><select className="input-field" value={scenario} onChange={(e) => setScenario(e.target.value)}>{scenarios.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
               <div className="form-group">
                 <label>叙事内容 <VoiceInput onTranscript={(text) => setContent(prev => { const t = prev.trim(); if (!t) return text; return t + (/[。！？，、；：]$/.test(t.slice(-1)) ? '' : '。') + text; })} /></label>
                 <textarea className="input-field" rows={6} placeholder="请记录幼儿的叙事内容..." value={content} onChange={(e) => setContent(e.target.value)} required />
@@ -128,33 +125,6 @@ const AssessPage: React.FC = () => {
           {assessment && assessment.dimensions && <div className="assess-results"><ResultView childName={childName} assessment={assessment} suggestions={assessment.suggestions || []} interactions={interactions} reflections={reflections} messages={[]} agentName="多多" report={report} /></div>}
         </div>
       )}
-
-      <style>{`
-        .assess-page{max-width:1200px;margin:0 auto}.page-header{margin-bottom:20px}.page-header h1{font-size:28px;margin-bottom:8px}.page-header p{color:var(--text-secondary);font-size:15px}
-        .mode-toggle{display:flex;gap:4px;background:#fff;border-radius:var(--radius-lg);padding:4px;box-shadow:var(--shadow-soft);margin-bottom:20px;width:fit-content}.mode-tab{padding:10px 24px;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:14px;font-weight:600;background:transparent;color:var(--text-secondary)}.mode-tab.active{background:linear-gradient(135deg,#FF8C42,#6B5B95);color:#fff}
-        .conv-layout{display:grid;grid-template-columns:320px 1fr;gap:20px;align-items:start}.conv-sidebar{position:sticky;top:24px}.assess-form{background:#fff;border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow-soft);margin-bottom:14px}.form-group{margin-bottom:14px}.form-group label{display:block;font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px}.form-group textarea{resize:vertical;min-height:130px}.char-count{display:block;text-align:right;font-size:12px;color:var(--text-light);margin-top:4px}.form-actions{display:flex;gap:10px;margin-top:18px}.conv-progress{margin-top:10px;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--text-secondary)}.btn-end{padding:6px 14px;border:none;border-radius:var(--radius-md);background:linear-gradient(135deg,#FF8C42,#FF6B6B);color:#fff;font-weight:600;cursor:pointer;font-size:13px}.btn-end:disabled{opacity:.6;cursor:not-allowed}
-        .scenario-hint{background:#fff;border-radius:var(--radius-lg);padding:14px;box-shadow:var(--shadow-soft)}.scenario-hint-label{display:block;font-size:12px;color:var(--text-light)}.scenario-hint-text{display:block;font-size:15px;font-weight:700;color:var(--text-primary)}.scenario-hint-desc{display:block;font-size:13px;color:var(--text-light);margin-top:4px}
-        .conv-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;color:var(--text-light);background:#fff;border-radius:var(--radius-lg);box-shadow:var(--shadow-soft)}.conv-empty-icon{font-size:48px;margin-bottom:14px}.conv-empty-hint{font-size:13px}
-        .conv-chat{background:#fff;border-radius:var(--radius-lg);box-shadow:var(--shadow-soft);display:flex;flex-direction:column;height:500px}.chat-header{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:14px}.chat-round{font-size:12px;color:var(--text-light);background:var(--bg-warm);padding:3px 8px;border-radius:12px}.chat-messages{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;background:#FAFAFA}.chat-bubble{display:flex;gap:8px;max-width:80%}.child-bubble{align-self:flex-end;flex-direction:row-reverse}.bubble-avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}.peer-bubble .bubble-avatar{background:#EDE7F6}.child-bubble .bubble-avatar{background:#FFF3E0}.bubble-content{padding:8px 12px;border-radius:12px;font-size:14px;line-height:1.6}.peer-bubble .bubble-content{background:#F3E5F5;color:#4A148C;border-bottom-left-radius:4px}.child-bubble .bubble-content{background:#FFF3E0;color:#E65100;border-bottom-right-radius:4px}.typing{color:var(--text-light)!important;font-style:italic;background:#F5F5F5!important}.chat-input-area{padding:10px 14px;border-top:1px solid var(--border)}.chat-input-row{display:flex;gap:8px}.chat-input{flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:20px;font-size:14px;outline:none}.chat-input:focus{border-color:#FF8C42}.chat-send-btn{padding:8px 18px;border:none;border-radius:20px;background:linear-gradient(135deg,#FF8C42,#6B5B95);color:#fff;font-weight:600;cursor:pointer;font-size:14px}.chat-send-btn:disabled{opacity:.5;cursor:not-allowed}.chat-voice-row{padding-top:6px;border-top:1px solid var(--border);margin-top:6px}.chat-assessing{padding:16px;text-align:center;color:var(--text-secondary);font-size:14px;border-top:1px solid var(--border)}.conv-result{padding:16px}
-        .assess-layout{display:grid;grid-template-columns:400px 1fr;gap:20px;align-items:start}.assess-form-container{position:sticky;top:24px}.assess-results{display:flex;flex-direction:column;gap:14px}
-        .result-card{background:#fff;border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow-soft);margin-bottom:14px}.result-card h3{font-size:16px;margin:0 0 12px;color:var(--text-primary)}
-        .overall-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.overall-header h2{font-size:20px}.level-badge{padding:6px 14px;border-radius:20px;font-size:14px;font-weight:600}
-        .radar-section{display:flex;justify-content:center;padding:10px 0}
-        .dimension-group{margin-bottom:16px}.dimension-header{display:flex;align-items:center;gap:6px;margin-bottom:6px}.dimension-icon{font-size:16px}.dimension-name{font-weight:600;font-size:15px}.dimension-bars{display:flex;flex-direction:column;gap:5px;padding-left:22px}.dim-bar{display:flex;align-items:center;gap:8px}.dim-bar>span:first-child{width:70px;font-size:13px;color:var(--text-secondary);flex-shrink:0}.bar-track{flex:1;height:8px;background:var(--bg-warm);border-radius:4px;overflow:hidden}.bar-fill{height:100%;border-radius:4px;transition:width .8s ease-out}.bar-value{width:20px;text-align:right;font-weight:600;font-size:13px}
-        .collaboration-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-        .collaboration-panel{border-radius:var(--radius-md);padding:16px}
-        .teacher-panel{background:linear-gradient(135deg,rgba(255,140,66,.08) 0%,rgba(255,140,66,.14) 100%)}.teacher-panel h4{margin:0 0 10px;font-size:15px}
-        .teacher-report-section{margin-bottom:10px}.teacher-report-section h5{margin:0 0 3px;font-size:13px;color:var(--text-primary)}.teacher-report-section p{margin:0;font-size:13px;color:var(--text-secondary);line-height:1.7}
-        .teacher-report-section p.activity-case{white-space:pre-line;line-height:1.9;background:rgba(255,255,255,.6);border-radius:8px;padding:10px 12px;border-left:3px solid var(--primary)}
-        .teacher-report-section p.teacher-advice{white-space:pre-line;line-height:1.7}
-        .db-report-text{white-space:pre-line;line-height:1.8;font-family:'Noto Sans SC',sans-serif;font-size:13px;color:var(--text-secondary);background:#F8F8FC;border-radius:10px;padding:16px;margin:0;border-left:3px solid #6B5B95}
-        .teacher-scaffold-list{list-style:decimal;padding:0 0 0 20px;margin:8px 0 0}.teacher-scaffold-list li{padding:4px 0;font-size:13px;color:var(--text-secondary);line-height:1.6;border-bottom:1px solid rgba(0,0,0,.04)}
-        .peer-panel{background:linear-gradient(135deg,rgba(107,91,149,.08) 0%,rgba(107,91,149,.14) 100%)}.peer-panel h4{margin:0 0 10px;font-size:15px}.peer-message-card{background:rgba(255,255,255,.78);border-radius:10px;padding:10px;margin-bottom:6px}.peer-message-card p{margin:4px 0 0;color:var(--text-secondary);line-height:1.6}
-        .empty-collab{color:var(--text-light);font-size:13px}
-        .spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;margin-right:6px}@keyframes spin{to{transform:rotate(360deg)}}.error-message{margin-top:10px;padding:10px;background:#FEE2E2;color:#DC2626;border-radius:var(--radius-md);font-size:14px}
-        @media(max-width:1024px){.assess-layout,.conv-layout{grid-template-columns:1fr}.assess-form-container{position:static}.collaboration-grid{grid-template-columns:1fr}}
-        @media(max-width:480px){.conv-chat{height:380px}.result-card{padding:14px}}
-      `}</style>
     </div>
   );
 };

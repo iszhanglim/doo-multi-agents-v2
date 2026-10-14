@@ -4,6 +4,7 @@ data/
 test-data/
 *.js.map
 *.d.ts
+*.tsbuildinfo
 .env
 .preview
 .DS_Store

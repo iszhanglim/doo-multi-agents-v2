@@ -24,7 +24,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const API_BASE = import.meta.env.PROD ? '/api' : 'http://localhost:3001/api';
+// 前后端同源部署（express 服务静态产物 + /api 均监听 5000），统一相对路径，避免与端口/地址耦合
+const API_BASE = '/api';
 const USER_SESSION_KEY = 'doo_user';
 const USERNAME_KEY = 'doo_username';
 /** 登录令牌（服务端 HMAC 签名）：管理类接口靠它做角色校验 */

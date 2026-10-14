@@ -6,6 +6,9 @@ interface VoiceInputProps {
 
 const TARGET_SAMPLE_RATE = 16000;
 
+/** 平台请求体上限约 16MB；STT 后端统一压到 15MB 以防被网关拒收 */
+const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+
 /**
  * 单次录音上限（毫秒）。
  * WAV 未压缩：16kHz/16bit = 32KB/s，60s ≈ 1.9MB；
@@ -127,6 +130,15 @@ const VoiceInput: React.FC<VoiceInputProps> = ({ onTranscript }) => {
 
   const transcribe = useCallback(async (blob: Blob) => {
     setStatus('transcribing');
+    // 上传前本地大小预检：超限（≥15MB）直接拒绝并引导分段，避免请求到网关才被 16MB 拦下、
+    // 也避免服务端返回 413 时用户对文件体积无感知。
+    if (blob.size > MAX_UPLOAD_BYTES) {
+      if (mountedRef.current) {
+        setError('录音超过 15MB 上限，请分段录制更短的片段后重试');
+        setStatus('idle');
+      }
+      return;
+    }
     try {
       // 直接以原始二进制发送音频（不用 FormData，避免 multipart 信封破坏音频数据）
       const res = await fetch('/api/stt', {
@@ -300,75 +312,6 @@ const VoiceInput: React.FC<VoiceInputProps> = ({ onTranscript }) => {
       )}
 
       {error && <span className="voice-error">{error}</span>}
-
-      <style>{`
-        .voice-input {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .voice-btn {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          padding: 8px 16px;
-          background: white;
-          border: 2px solid var(--border);
-          border-radius: var(--radius-md);
-          cursor: pointer;
-          font-size: 14px;
-          color: var(--text-secondary);
-          transition: all 0.3s ease;
-          font-family: inherit;
-        }
-
-        .voice-btn:hover:not(:disabled) {
-          border-color: var(--primary);
-          color: var(--primary);
-        }
-
-        .voice-btn:disabled {
-          opacity: 0.6;
-          cursor: wait;
-        }
-
-        .voice-btn.active {
-          border-color: #FF6B6B;
-          color: #FF6B6B;
-          animation: pulse 1.5s ease-in-out infinite;
-        }
-
-        .voice-wave {
-          display: flex;
-          align-items: center;
-          gap: 3px;
-          height: 24px;
-        }
-
-        .voice-wave span {
-          width: 3px;
-          background: #FF6B6B;
-          border-radius: 2px;
-          animation: wave 1s ease-in-out infinite;
-        }
-
-        .voice-wave span:nth-child(1) { height: 8px; animation-delay: 0s; }
-        .voice-wave span:nth-child(2) { height: 16px; animation-delay: 0.1s; }
-        .voice-wave span:nth-child(3) { height: 24px; animation-delay: 0.2s; }
-        .voice-wave span:nth-child(4) { height: 16px; animation-delay: 0.3s; }
-        .voice-wave span:nth-child(5) { height: 8px; animation-delay: 0.4s; }
-
-        @keyframes wave {
-          0%, 100% { transform: scaleY(0.5); }
-          50% { transform: scaleY(1); }
-        }
-
-        .voice-error {
-          font-size: 12px;
-          color: #FF6B6B;
-        }
-      `}</style>
     </div>
   );
 };

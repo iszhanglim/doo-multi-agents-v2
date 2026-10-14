@@ -172,43 +172,6 @@ const RadarChart: React.FC<RadarChartProps> = ({ data, size = 280 }) => {
           </div>
         ))}
       </div>
-
-      <style>{`
-        .radar-chart-container {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 16px;
-        }
-
-        .radar-legend {
-          display: flex;
-          gap: 20px;
-          justify-content: center;
-        }
-
-        .legend-item {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 13px;
-        }
-
-        .legend-dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-        }
-
-        .legend-label {
-          color: var(--text-secondary);
-        }
-
-        .legend-value {
-          font-weight: 600;
-          color: var(--primary);
-        }
-      `}</style>
     </div>
   );
 };

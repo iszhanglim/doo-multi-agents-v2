@@ -11,7 +11,14 @@ export type MessageType =
 
 export type Level = 1 | 2 | 3 | 4 | 5;
 
-export type ScenarioType = 'smart_story_corner' | 'narrative_train' | 'journey_podcast';
+export type ScenarioType =
+  | 'smart_story_corner'
+  | 'narrative_train'
+  | 'journey_podcast'
+  | 'morning_check_in'
+  | 'area_activity'
+  | 'outdoor_sport'
+  | 'daily_life';
 
 export interface AgentMessage {
   id: string;
@@ -150,6 +157,14 @@ export function getScenarioLabel(scenario: ScenarioType): string {
       return '叙事火车';
     case 'journey_podcast':
       return '西游播客';
+    case 'morning_check_in':
+      return '入园晨检';
+    case 'area_activity':
+      return '区域活动';
+    case 'outdoor_sport':
+      return '户外/体育游戏';
+    case 'daily_life':
+      return '生活活动（进餐/午睡）';
     default:
       return scenario;
   }

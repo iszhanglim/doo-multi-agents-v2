@@ -1,0 +1,132 @@
+/* ===== 个人资料页 / ProfilePage ===== */
+
+.profile-page {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.profile-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.profile-card {
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  box-shadow: var(--shadow-soft);
+}
+
+.profile-card h3 {
+  font-size: 16px;
+  margin-bottom: 20px;
+  color: var(--text-primary);
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.profile-avatar-large {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary-light), var(--secondary-light));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  flex-shrink: 0;
+}
+
+.profile-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-meta h2 {
+  font-size: 22px;
+  color: var(--text-primary);
+}
+
+.profile-role {
+  font-size: 14px;
+  color: var(--text-secondary);
+  background: var(--bg-warm);
+  padding: 4px 12px;
+  border-radius: 12px;
+  display: inline-block;
+  width: fit-content;
+}
+
+.avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+
+.avatar-option {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  background: var(--bg-warm);
+  font-size: 24px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+}
+
+.avatar-option:hover {
+  border-color: var(--primary-light);
+  transform: scale(1.1);
+}
+
+.avatar-option.active {
+  border-color: var(--primary);
+  background: linear-gradient(135deg, rgba(255, 140, 66, 0.1) 0%, rgba(107, 91, 149, 0.1) 100%);
+}
+
+.form-error {
+  padding: 10px 14px;
+  background: #fee2e2;
+  color: #dc2626;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.form-success {
+  padding: 10px 14px;
+  background: #d1fae5;
+  color: #059669;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.logout-card {
+  padding: 16px 28px;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .profile-card {
+    padding: 20px;
+  }
+  .profile-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .avatar-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
