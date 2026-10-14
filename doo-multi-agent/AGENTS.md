@@ -239,6 +239,15 @@ pnpm v10 起**默认拦截依赖包的自定义构建脚本（postinstall/instal
 **修复方式**：在根 `package.json` 与 `web/package.json` 各声明 `pnpm.onlyBuiltDependencies` 白名单（根放 `bcrypt`/`coze-coding-dev-sdk`，web 放 `esbuild`/`lightningcss`）。新增此类原生依赖时记得同步加白名单；不要用 `--no-optional` 或删除构建脚本绕过。
 **提醒**：`pnpm v9` 不会把该字段写进 lockfile（v10 才写），但 pnpm v10 始终以 `package.json` 为权威源读取，平台 `--frozen-lockfile` 下仍生效，无需强制升级 lockfileVersion。
 
+### 8.2 部署构建坑：pnpm 交互式确认在无 TTY 平台卡死
+`pnpm install`（含 `--frozen-lockfile`）在检测到 node_modules 需要移除重建时，会弹出**交互式确认**：
+```
+The modules directory at ".../node_modules" will be removed and reinstalled from scratch. Proceed? (Y/n)
+```
+平台构建环境**无 TTY**，该提示会一直挂起直至构建超时失败（本地手动跑则表现为 `timeout 180` 无输出被 `EXIT=124` 结束）。dev 预览正常是因为本地已同步、不会触发重建确认，所以「dev 正常、线上 Failed」。
+
+**修复方式**：`scripts/build.sh` 顶部 `export CI=true`。pnpm 在 CI 模式下跳过一切交互确认（包括模块清除确认），`node_modules` 需要重建时会自动重建而非询问；同时保持 `set -euo pipefail`，若 install 真失败仍会立即中止并打印真实错误（不再被 `|| fallback` 掩盖）。**勿删**该 `export CI=true`。
+
 ## 9. 安全与访问控制
 
 服务端访问控制位于 `web/server/index.ts` 文件头部（有明确的起止注释标记），分三层：
