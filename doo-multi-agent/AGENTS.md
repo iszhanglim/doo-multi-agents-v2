@@ -99,6 +99,14 @@ npm start            # = cd web && npx tsx server/index.ts
 5. **不要把 `node_modules` 提交进版本控制**。
 6. **不要给 `/api/health` 加鉴权**，也不要移动访问控制中间件的位置 ——
    它必须位于 `app.use(cors())` 之后、`app.use(bodyParser.json())` 之前。
+7. **模块加载期（`app.listen` 之前）禁止同步写文件系统**，否则启动即崩、健康检查失败。
+   线上曾遇：未注入 `DATABASE_URL` 时走 JSON 存储，`PortraitStorage` 构造函数在 `src/index.ts` 顶层
+   `new DOOMultiAgentSystem()` 里同步 `mkdirSync('./data')`，而平台 FaaS 文件系统只读，
+   `mkdirSync` 直接抛 `ENOENT` → 进程在 listen 前退出 → 部署 Failed（日志形如
+   `ENOENT: no such file or directory, mkdir './data' / at PortraitStorage.ensureDataDir`）。
+   已修复：`PortraitStorage.ensureDataDir` 建目录失败时**捕获并回退到 `os.tmpdir()`（/tmp）**，只告警不崩溃。
+   以后新增任何「启动期落盘」逻辑必须同样容错回退，禁止裸 `mkdirSync`/`writeFileSync`。
+   该问题会因 sandbox 以 root 运行（root 无视只读权限）而无法本地直观复现，需用只读路径（如 `/sys`）验证。
 
 ## 5. 数据持久化：必须用内置 PostgreSQL
 

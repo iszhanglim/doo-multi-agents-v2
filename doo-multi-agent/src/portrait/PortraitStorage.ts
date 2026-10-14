@@ -3,6 +3,7 @@ import { IPortraitStorage } from './IPortraitStorage';
 import * as fs from 'fs/promises';
 import { existsSync, mkdirSync, readdirSync } from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 
 export interface StorageConfig {
   type: 'json' | 'sqlite';
@@ -20,6 +21,19 @@ export class PortraitStorage implements IPortraitStorage {
   }
 
   private ensureDataDir(): void {
+    try {
+      if (!existsSync(this.dataDir)) {
+        mkdirSync(this.dataDir, { recursive: true });
+      }
+      return;
+    } catch (err) {
+      // 生产 FaaS 只读文件系统下，cwd 内创建目录会抛 ENOENT/EROFS。
+      // 启动期绝不能因存储目录不可写而崩溃 —— 回退到系统临时目录，并明确告警。
+      console.warn(
+        `⚠️  无法在 ${this.dataDir} 创建 JSON 存储目录（${(err as Error).message}），回退到 ${os.tmpdir()}`
+      );
+    }
+    this.dataDir = path.join(os.tmpdir(), 'doo-multi-agent-data');
     if (!existsSync(this.dataDir)) {
       mkdirSync(this.dataDir, { recursive: true });
     }
