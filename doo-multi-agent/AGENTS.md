@@ -107,6 +107,13 @@ npm start            # = cd web && npx tsx server/index.ts
    已修复：`PortraitStorage.ensureDataDir` 建目录失败时**捕获并回退到 `os.tmpdir()`（/tmp）**，只告警不崩溃。
    以后新增任何「启动期落盘」逻辑必须同样容错回退，禁止裸 `mkdirSync`/`writeFileSync`。
    该问题会因 sandbox 以 root 运行（root 无视只读权限）而无法本地直观复现，需用只读路径（如 `/sys`）验证。
+8. **登录令牌头契约：支持 `X-Auth-Token` 与 `Authorization: Bearer` 二者等价。**
+   服务端 `getAuthUser` 优先读 `X-Auth-Token`（前端 api 栈采用），否则读 `Authorization: Bearer <token>`。
+   曾误以为「班级/场景接口带 token 也 401」，实为测试用 `Authorization: Bearer` 而旧实现只认 `X-Auth-Token`，
+   真实账号（含 mustChangePassword=true 的 teacher）用对头即 200。**排查 401 先确认请求头用的是哪种**；
+   `mustChangePassword` 不在 token payload 中，不参与 requireAuth 判定。
+   `/api/portraits`、`/api/stats`、`POST /api/scenario/:type` 是**开放接口**（无 requireAuth），无 token 也 200——属设计，非缺陷。
+   `/api/scenario/:type` 仅注册 **POST**（与前端 `runScenario` 匹配），无 GET；场景详情不按 `GET /api/scenario/:id` 暴露。
 
 ## 5. 数据持久化：必须用内置 PostgreSQL
 

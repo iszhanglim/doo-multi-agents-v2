@@ -163,8 +163,16 @@ function verifyAuthToken(token: string): AuthTokenPayload | null {
 
 /** 解析当前登录用户（无令牌 / 签名错 / 过期 均返回 null） */
 function getAuthUser(req: Request): AuthTokenPayload | null {
-  const raw = req.headers[AUTH_HEADER];
-  const token = Array.isArray(raw) ? raw[0] : raw;
+  // 优先自有头 X-Auth-Token（前端 api 栈采用）；同时兼容标准 Authorization: Bearer
+  // （外部客户端/curl/网关常用）。二者等价，避免「有合法 token 却因头不匹配被判未登录」。
+  let raw = req.headers[AUTH_HEADER];
+  let token = Array.isArray(raw) ? raw[0] : raw;
+  if (!token) {
+    const auth = req.headers.authorization || '';
+    if (auth.startsWith('Bearer ')) {
+      token = auth.slice('Bearer '.length);
+    }
+  }
   if (!token) return null;
   return verifyAuthToken(token.trim());
 }
